@@ -1,4 +1,7 @@
 mod kzg;
+mod schnorr;
+mod gkr;
+mod sumcheck;
 
 use std::ops::{Div, Mul, Sub};
 use std::process::id;
@@ -15,9 +18,8 @@ use ark_test_curves::bls12_381::g1::Config as G1Config;
 use ark_test_curves::bls12_381::g2::Config as G2Config;
 
 use ark_poly::DenseUVPolynomial;
-use ark_std::iterable::Iterable;
 
-fn main() {
+fn run_kzg() {
     let polynomial = DensePolynomial::from_coefficients_vec(
         vec![Fr::from(11), Fr::from(12), Fr::from(345)]
     );
@@ -32,6 +34,12 @@ fn main() {
     let is_valid = verify_commitment(&commitment, &tau_g2, &random_a, &f_a, &evaluation_proof);
     
     println!("is_valid = {}", is_valid);
+}
+
+fn main() {
+    // run_kzg();
+    // schnorr::run_schnorr();
+    sumcheck::test_sc();
 }
 
 fn setup() -> (Vec<Affine<G1Config>>, Affine<G2Config>) {
@@ -60,7 +68,6 @@ fn commit_to_poly(
 
 fn open_commitment(
     srs: &Vec<Affine<G1Config>>,
-    // tau_g2: &Affine<G2Config>,
     a: &Fr,
     poly: &DensePolynomial<Fr>,
 ) -> (Fr, Affine<G1Config>) {
@@ -75,14 +82,16 @@ fn open_commitment(
     (f_a, evaluation_proof)
 }
 
+fn multi_open() {
+    
+}
+
 fn verify_commitment(
     commitment: &Affine<G1Config>,
-    // srs: &Vec<Affine<G1Config>>,
     tau_g2: &Affine<G2Config>,
     a: &Fr,
     f_a: &Fr,
     evaluation_proof: &Affine<G1Config>,
-    // poly: &DensePolynomial<Fr>,
 ) -> bool {
     let l_pairing = Bls12_381::pairing(
         evaluation_proof,
@@ -197,8 +206,4 @@ fn eval_poly_on_srs(
         .reduce(|a, b| a + b)
         .unwrap()
         .into_affine()
-
-    // let evaluation_proof = poly.coeffs.iter().zip(srs).map(|(x_i, h)| {
-    //     h.mul(x_i)
-    // }).reduce(|a, b| a + b).unwrap();
 }

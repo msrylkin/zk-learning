@@ -39,7 +39,8 @@ fn run_kzg() {
 fn main() {
     // run_kzg();
     // schnorr::run_schnorr();
-    sumcheck::test_sc();
+    // sumcheck::test_sc();
+    gkr::test_gkr();
 }
 
 fn setup() -> (Vec<Affine<G1Config>>, Affine<G2Config>) {

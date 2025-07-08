@@ -632,7 +632,11 @@ pub fn test_gkr() {
         executor: ExecutorGateEnum::Mul(MulGate {})
     };
 
-    println!("-12719300 {}\n-24282300 {}", Fr::from(-12719300), Fr::from(-24282300));
+    println!(
+        "-12719300 {}\n-24282300 {}",
+        Fr::from(-12719300),
+        Fr::from(-24282300),
+    );
 
     let layer_1 = Layer {
         gates: vec![&add_gate_1, &add_gate_2],
@@ -689,8 +693,8 @@ fn prove<F: Field>(
                 res
             } else {
                 let evals = solution.evaluations[i - 1].clone();
-                let len = evals.len();
                 let mut evals = pad_with_zeroes(&evals);
+                let len = evals.len();
                 remap_to_reverse_bits_indexing(&mut evals, len.ilog2() as usize);
                 interpolate(&evals)
             }
@@ -710,7 +714,14 @@ fn prove<F: Field>(
 
         println!("mi {:?}", mi);
 
-        let (used_r, used_polys) = sumcheck::prove_2(sc_poly.clone(), mi);
+        // let (used_r, used_polys) = sumcheck::prove_2_old(sc_poly.clone(), mi);
+        let sumcheck_proof = sumcheck::prove_2(&sc_poly, mi);
+        
+        let mut used_r = sumcheck_proof.steps
+            .iter()
+            .map(|step| step.r)
+            .collect::<Vec<_>>();
+        used_r.push(sumcheck_proof.last_round_r);
 
         let (b, c) = used_r.split_at(used_r.len() / 2);
         let l = line(b, c);
@@ -720,7 +731,7 @@ fn prove<F: Field>(
         let q_1 = q.evaluate(&F::one());
 
         let final_poly_eval_prover = Polynomial::evaluate(&add_fixed, &used_r) * (q_0 + q_1) + Polynomial::evaluate(&mul_fixed, &used_r) * (q_0 * q_1);
-        let last_poly = used_polys.last().unwrap();
+        let last_poly = &sumcheck_proof.steps.last().unwrap().poly;
 
         assert_eq!(last_poly.evaluate(&used_r.last().unwrap()), final_poly_eval_prover);
         

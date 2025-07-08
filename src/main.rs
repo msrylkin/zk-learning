@@ -2,6 +2,7 @@ mod kzg;
 mod schnorr;
 mod gkr;
 mod sumcheck;
+mod poly_utils;
 
 use std::ops::{Div, Mul, Sub};
 use std::process::id;

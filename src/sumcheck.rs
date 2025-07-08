@@ -10,9 +10,11 @@ pub fn test_sc() {
         4,
         vec![91, 62, 13, 431, 98, 123, 2871, 7, 512, 12, 63 ,982, 474, 2847, 912, 744].into_iter().map(Fr::from).collect()
     );
+    
+    let sum = poly.iter().sum::<Fr>();
 
     // prove(poly);
-    prove_2(poly);
+    prove_2(poly, sum);
 
     println!("poly proved");
 }
@@ -120,12 +122,13 @@ fn prove_for_val<F: Field, S: SumCheckPoly<F> + Clone>(poly: S) {
 }
 
 pub fn prove_2<F: Field, S: SumCheckPoly<F> + Clone + Debug>(
-    poly: S
+    poly: S,
+    H: F,
 ) -> (Vec<F>, Vec<DensePolynomial<F>>) {
     let random_points = vec![32,23,35,48].into_iter()
         .map(F::from)
         .collect::<Vec<_>>();
-    let H = poly.get_evaluations().iter().sum::<F>();
+    // let H = poly.get_evaluations().iter().sum::<F>();
     println!("poly {:?} vnum {}", poly.get_evaluations(), poly.num_vars());
     println!("H {}", H);
     let num_vars = poly.num_vars();

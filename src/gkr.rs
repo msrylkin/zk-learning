@@ -7,8 +7,7 @@ use ark_poly::univariate::DensePolynomial;
 use ark_std::iterable::Iterable;
 use ark_test_curves::bls12_381::Fr;
 use crate::sumcheck;
-use crate::sumcheck::{interpolate_univariate_on_evals, sum_over_last_variable, SumCheckPoly};
-// use ark_poly::polynomial::univariate::lagrange_interpolate;
+use crate::sumcheck::{interpolate_univariate_on_evals, SumCheckPoly};
 
 trait ExecuteGate<F: Field> {
     fn execute(&self, a: &F, b: &F) -> F;
@@ -69,12 +68,26 @@ struct Solution<F: Field> {
     inputs: Vec<F>,
 }
 
+impl<F: Field> From<Solution<F>> for Vec<Vec<F>> {
+    fn from(solution: Solution<F>) -> Self {
+        let mut res = vec![solution.inputs];
+        res.extend_from_slice(&solution.evaluations);
+
+        res
+    }
+}
+
 #[derive(Debug, Clone)]
-struct RoundPoly<F: Field> {
+struct LayerRoundPoly<F: Field> {
     add_i: DenseMultilinearExtension<F>,
     mul_i: DenseMultilinearExtension<F>,
     Wi_1_a: DenseMultilinearExtension<F>,
     Wi_1_b: DenseMultilinearExtension<F>,
+}
+
+enum RoundPoly<F: Field> {
+    Layer(LayerRoundPoly<F>),
+    Inputs(DenseMultilinearExtension<F>),
 }
 
 fn get_bits(k: usize, bit_len: usize) -> Vec<usize> {
@@ -131,22 +144,16 @@ fn get_evaluations_by_mask<F: Field>(
     }
 
     let bit_set = 1 << nvars;
-    // println!("nvars {} bit_set {:#08b}", nvars, bit_set);
     let mut mle_evals = poly.to_evaluations();
     remap_to_reverse_bits_indexing(&mut mle_evals, MultilinearExtension::num_vars(poly));
-    // println!("mle remapped {:?}", mle_evals);
 
-    // let index_1 = reverse_bits(bit_set | mask, MultilinearExtension::num_vars(poly));
-    // let index_2 = reverse_bits(mask, MultilinearExtension::num_vars(poly));
-    let index_1 = bit_set | mask;
-    let index_2 = mask;
-
-    // println!("index_1 {:#08b} {} index_2 {:#08b} {}", index_1, index_1,  index_2, index_2);
+    let index_1 = mask;
+    let index_2 = bit_set | mask;
 
     let mut new_evals = vec![];
 
-    new_evals.push(mle_evals[index_2]);
     new_evals.push(mle_evals[index_1]);
+    new_evals.push(mle_evals[index_2]);
 
     new_evals
 }
@@ -216,41 +223,21 @@ fn test_intp<F: Field>(evals: &[F]) -> DensePolynomial<F> {
     interpolate_univariate_on_evals(&[zeroes, ones])
 }
 
-impl<F: Field> SumCheckPoly<F> for RoundPoly<F> {
+impl<F: Field> SumCheckPoly<F> for LayerRoundPoly<F> {
     fn get_evaluations(&self) -> Vec<F> {
         let mut res = vec![];
-        // let num_vars = MultilinearExtension::num_vars(&self.add_i);
         let a_num_vars = MultilinearExtension::num_vars(&self.Wi_1_a);
         let b_num_vars = MultilinearExtension::num_vars(&self.Wi_1_b);
         let ab_num_vars = a_num_vars + b_num_vars;
         let a_domain = 1 << a_num_vars;
         let b_domain = 1 << b_num_vars;
-        // println!("a_numvars {} b_num_vars {}", a_num_vars, b_num_vars);
 
         for a in 0..a_domain {
             for b in 0..b_domain {
-                // let a_bits = get_bits(a, n / 2).into_iter().map(|e| F::from(e as u64)).collect::<Vec<_>>();
-                // let b_bits = get_bits(b, n / 2).into_iter().map(|e| F::from(e as u64)).collect::<Vec<_>>();;
-                // let ab_combined_mask = (a << (n / 2)) | b;
-                // let ab_bits = get_bits(ab_combined_mask, n).into_iter().map(|e| F::from(e as u64)).collect::<Vec<_>>();
-                //
-                // let add_eval = Polynomial::evaluate(&self.add_i, &ab_bits)
-                //     * (Polynomial::evaluate(&self.Wi_1, &a_bits) + Polynomial::evaluate(&self.Wi_1, &b_bits));
-                // let mul_eval = Polynomial::evaluate(&self.mul_i, &ab_bits)
-                //     * (Polynomial::evaluate(&self.Wi_1, &a_bits) * Polynomial::evaluate(&self.Wi_1, &b_bits));
-                //
-                // res.push(add_eval + mul_eval);
                 let ab_combined_mask = (a << b_num_vars) | b;
                 let ab_combined_mask_reversed = reverse_bits(ab_combined_mask, ab_num_vars);
-                // println!("a {:#010b} b {:#010b} ab_combined_mask {:#010b}", a, b, ab_combined_mask_reversed);
                 let ab_bits = get_bits(ab_combined_mask_reversed, ab_num_vars).into_iter().map(|e| F::from(e as u64)).collect::<Vec<_>>();
-                // let a_bits = get_bits(a, a_num_vars);
-                // let b_bits = get_bits(b, b_num_vars);
-                // let ab_bits = a_bits.into_iter()
-                //     .chain(b_bits.into_iter())
-                //     .map(|e| F::from(e as u64))
-                //     .collect::<Vec<_>>();
-                let eval = RoundPoly::evaluate(&self, &ab_bits);
+                let eval = LayerRoundPoly::evaluate(&self, &ab_bits);
 
                 res.push(eval);
             }
@@ -266,139 +253,37 @@ impl<F: Field> SumCheckPoly<F> for RoundPoly<F> {
     fn get_partial_sum_poly(&self) -> DensePolynomial<F> {
         let a_vars = MultilinearExtension::num_vars(&self.Wi_1_a);
         let b_vars = MultilinearExtension::num_vars(&self.Wi_1_b);
-        // let (a_vars_fixing, b_vars_fixing) = {
-        //     if a_vars > 0 {
-        //         (a_vars - 1, b_vars)
-        //     } else {
-        //         (a_vars, b_vars - 1)
-        //     }
-        // };
-        // let a_domain = 1 << a_vars_fixing;
-        // let b_domain = 1 << b_vars_fixing;
-        let Wi_1a_rev = get_reversed_vars_poly(&self.Wi_1_a);
-        let Wi_1b_rev = get_reversed_vars_poly(&self.Wi_1_b);
-        let add_rev = get_reversed_vars_poly(&self.add_i);
-        let mul_rev = get_reversed_vars_poly(&self.mul_i);
 
         let mut res_poly = DensePolynomial::from_coefficients_vec(vec![F::zero()]);
 
         let ((a_vars_fixing, b_vars_fixing), eval_params) = generate_round_poly_eval_parameters(a_vars, b_vars);
 
         for (common_params, a_params, b_params) in eval_params {
-            println!("common_params {:#08b}", common_params);
             let Wi_a_uni = to_two_or_one_degree(&self.Wi_1_a, a_params, a_vars_fixing);
-            println!("a params {:#08b} Wi_a_uni {:?}", a_params, Wi_a_uni);
             let Wi_b_uni = to_two_or_one_degree(&self.Wi_1_b, b_params, b_vars_fixing);
-            println!("b_params {:#08b} Wi_b_uni {:?}", b_params, Wi_b_uni);
             let add_i_uni = to_two_or_one_degree(&self.add_i, common_params, a_vars_fixing + b_vars_fixing);
-            println!("add_i_uni {:?}", add_i_uni);
             let mul_uni = to_two_or_one_degree(&self.mul_i, common_params, a_vars_fixing + b_vars_fixing);
-            println!("mul_i_uni {:?}", mul_uni);
 
             let add_poly = add_i_uni.naive_mul(&(&Wi_a_uni + &Wi_b_uni));
             let mul_poly = mul_uni.naive_mul(&(Wi_a_uni.naive_mul(&Wi_b_uni)));
             let local_res_poly = add_poly + mul_poly;
 
-            println!("local_res_poly {:?}\n", local_res_poly);
-
             res_poly = res_poly + local_res_poly;
         }
-        // println!("a_vars_fixing {}\nb_vars_fixing {}", a_vars_fixing, b_vars_fixing);
-        // println!("Wi_a {:?}", self.Wi_1_a);
-        // println!("Wi_b {:?}", self.Wi_1_b);
-        // println!("add_i {:?}", self.add_i);
-        // println!("mul_i {:?}", self.mul_i);
-        //
-        // let combined_domain = 1 << (a_vars_fixing + b_vars_fixing);
-        //
-        // let ab_domain = a_domain + b_domain;
-        // println!("combined_domain {}", combined_domain);
-        // let a_mask = (1 << a_vars_fixing) - 1;
-        // let b_mask = (1 << b_vars_fixing) - 1;
-        // println!("a_mask {:#08b} {:#08b}", a_mask, b_mask);
-        //
-        // for i in 0..combined_domain {
-        //     let ab_mask = i;
-        //     println!("\nab_mask {:#08b}", ab_mask);
-        //     let ai = i & a_mask;
-        //     let bi = i & b_mask;
-        //
-        //     println!("ai {:#08b}", ai);
-        //     println!("bi {:#08b}", bi);
-        //     let Wi_a_dense = to_two_or_one_degree(&self.Wi_1_a, ai, a_vars_fixing);
-        //     println!("Wi_a_dense {:?}", Wi_a_dense);
-        //     let Wi_b_dense = to_two_or_one_degree(&self.Wi_1_b, bi, b_vars_fixing);
-        //     println!("Wi_b_dense {:?}", Wi_b_dense);
-        //     let add_dense = to_two_or_one_degree(&self.add_i, ab_mask, a_vars_fixing + b_vars_fixing);
-        //     println!("ab_mask {:#08b} add {:?}\nadd_dense {:?}", ab_mask, self.add_i.evaluations, add_dense);
-        //     let mul_dense = to_two_or_one_degree(&self.mul_i, ab_mask, a_vars_fixing + b_vars_fixing);
-        //     println!("mul_dense {:?}", mul_dense);
-        //
-        //     let add_poly = add_dense.naive_mul(&(&Wi_a_dense + &Wi_b_dense));
-        //     let mul_poly = mul_dense.naive_mul(&(Wi_a_dense.naive_mul(&Wi_b_dense)));
-        //     let local_res_poly = add_poly + mul_poly;
-        //
-        //     println!("\nlocal_res_poly {:?}", local_res_poly);
-        //
-        //     res_poly = res_poly + local_res_poly;
-        // }
-        //
-        return res_poly;
-
-        // println!("res poly new inter {:?}", res_poly);
-        let res_poly_0 = res_poly.evaluate(&F::zero());
-        let res_poly_1 = res_poly.evaluate(&F::one());
-        // println!("res poly(0) {}", res_poly_0);
-        // println!("res poly(1) {}", res_poly_1);
-        // println!("res poly sum {}", res_poly_0 + res_poly_1);
 
         res_poly
     }
 
-    // fn get_partial_sum_poly(&self) -> DensePolynomial<F> {
-    //     // Choose 3 distinct field elements manually
-    //     let t_values = vec![F::from(0u64), F::from(1u64), F::from(2u64)];
-    //     let mut evals = vec![];
-    //
-    //     for t in &t_values {
-    //         let fixed = self.fix_variables(&[*t]);
-    //         let sum = fixed.get_evaluations().iter().copied().sum::<F>();
-    //         evals.push(sum);
-    //     }
-    //
-    //     // Interpolate over (t_values, evals)
-    //     // let dense_poly: DensePolynomial<F> = lagrange_interpolate(&t_values, &evals);
-    //     // dense_poly.into() // convert to sparse
-    //     let mut res = vec![];
-    //     let lagrange_polys = get_lagrange_polys(evals.len());
-    //     for lp in lagrange_polys {
-    //         res.push(lp.int)
-    //     }
-    // }
-
     fn fix_variables(&self, partial_point: &[F]) -> Self {
-        println!("fixing {:?}", partial_point);
         if MultilinearExtension::num_vars(&self.Wi_1_a) > 0 {
-            // println!("before fix mul {:?}", &self.mul_i);
-            // println!("mul (0,0) {}", &Polynomial::evaluate(&self.mul_i, &vec![F::zero(), F::zero()]));
-            // println!("mul (0,1) {}", &Polynomial::evaluate(&self.mul_i, &vec![F::zero(), F::one()]));
-            // println!("mul (1,0) {}", &Polynomial::evaluate(&self.mul_i, &vec![F::one(), F::zero()]));
-            // println!("mul (1,1) {}", &Polynomial::evaluate(&self.mul_i, &vec![F::one(), F::one()]));
-            let res = RoundPoly {
+            Self {
                 add_i: MultilinearExtension::fix_variables(&self.add_i, partial_point),
                 mul_i: MultilinearExtension::fix_variables(&self.mul_i, partial_point),
                 Wi_1_a: MultilinearExtension::fix_variables(&self.Wi_1_a, partial_point),
                 Wi_1_b: self.Wi_1_b.clone(),
-            };
-
-            // println!("res.add {:?}", res.add_i);
-            // println!("res.mul {:?}", res.mul_i);
-            // println!("res.Wi_1a {:?}", res.Wi_1_a);
-            // println!("res.Wi_1b {:?}", res.Wi_1_b);
-
-            res
+            }
         } else {
-            RoundPoly {
+            Self {
                 add_i: MultilinearExtension::fix_variables(&self.add_i, partial_point),
                 mul_i: MultilinearExtension::fix_variables(&self.mul_i, partial_point),
                 Wi_1_a: self.Wi_1_a.clone(),
@@ -413,11 +298,6 @@ impl<F: Field> SumCheckPoly<F> for RoundPoly<F> {
         let (a_bits, b_bits) = binding.split_at(a_vars);
         let a_bits = a_bits.to_vec();
         let b_bits = b_bits.to_vec();
-        // println!("evaluate a_bits {:?} b_bits {:?}", a_bits, b_bits);
-        // let a_bits = get_bits(a, n / 2).into_iter().map(|e| F::from(e as u64)).collect::<Vec<_>>();
-        // let b_bits = get_bits(b, n / 2).into_iter().map(|e| F::from(e as u64)).collect::<Vec<_>>();;
-        // let ab_combined_mask = (a << (n / 2)) | b;
-        // let ab_bits = get_bits(ab_combined_mask, n).into_iter().map(|e| F::from(e as u64)).collect::<Vec<_>>();
 
         let add_eval = Polynomial::evaluate(&self.add_i, &point.to_vec())
             * (Polynomial::evaluate(&self.Wi_1_a, &a_bits) + Polynomial::evaluate(&self.Wi_1_b, &b_bits));
@@ -427,10 +307,6 @@ impl<F: Field> SumCheckPoly<F> for RoundPoly<F> {
         add_eval + mul_eval
     }
 }
-
-// fn sum_over_last_sc<F: Field>(poly: RoundPoly<F>) {
-//     if
-// }
 
 impl<'a, F: Field> Circuit<'a, F> {
     fn solve(&self) -> Solution<F> {
@@ -590,22 +466,14 @@ impl<'a, F: Field> Circuit<'a, F> {
         if !gates_n.is_power_of_two() {
             gates_n = gates_n.next_power_of_two();
         }
-        // let
         let vars_num = f64::from(gates_n as u32).log2().ceil() as usize;
-        // println!("gates_num {}", gates_n);
-        // println!("vars {}", vars_num);
-        // println!("trailing zeroes {}", (gates_n as u64).trailing_zeros());
         let domain_size = 1 << vars_num;
-        // println!("domain_size {}", domain_size);
-        // let bottom_layer = &self.layers[layer_i - 1];
-        // let mut bottom_gates_n = bottom_layer.gates.len();
         let mut bottom_gates_n = self.gates_n_at_layer_i_1(layer_i);
         if !bottom_gates_n.is_power_of_two() {
             bottom_gates_n = bottom_gates_n.next_power_of_two();
         }
         let bottom_vars_num = f64::from(bottom_gates_n as u32).log2().ceil() as usize;
         let bottom_domain_size = 1 << bottom_vars_num;
-        // println!("bottom_gates_n {} bottom_vars_num {} bottom_domain_size {}", bottom_gates_n, bottom_vars_num, bottom_domain_size);
 
         let mut evals = vec![];
 
@@ -648,58 +516,6 @@ impl<'a, F: Field> Circuit<'a, F> {
         DenseMultilinearExtension::from_evaluations_vec(vars_num + 2 * bottom_vars_num, evals)
     }
 
-    // fn mul_i(&self, layer_i: usize) -> DenseMultilinearExtension<F> {
-    //     let layer = &self.layers[layer_i];
-    //     let mut gates_n = layer.gates.len();
-    //     if !gates_n.is_power_of_two() {
-    //         gates_n = gates_n.next_power_of_two();
-    //     }
-    //     // let
-    //     let vars_num = f64::from(gates_n as u32).log2().ceil() as usize;
-    //     let domain_size = 1 << vars_num;
-    //     let bottom_layer = &self.layers[layer_i - 1];
-    //     let mut bottom_gates_n = bottom_layer.gates.len();
-    //     if !bottom_gates_n.is_power_of_two() {
-    //         bottom_gates_n = bottom_gates_n.next_power_of_two();
-    //     }
-    //     let bottom_vars_num = f64::from(bottom_gates_n as u32).log2().ceil() as usize;
-    //     let bottom_domain_size = 1 << bottom_vars_num;
-    //
-    //     let mut evals = vec![];
-    //
-    //     for z in 0..domain_size {
-    //         for a in 0..bottom_domain_size {
-    //             for b in 0..bottom_domain_size {
-    //                 if let Some(current_gate) = layer.gates.get(z) {
-    //                     let inputs = current_gate.inputs;
-    //                     match inputs {
-    //                         GateInput::Inputs((a, b)) => {
-    //                             panic!("not now")
-    //                         },
-    //                         GateInput::Gates((a_gate, b_gate)) => {
-    //                             if let (Some(bottom_a), Some(bottom_b)) = (bottom_layer.gates.get(a), bottom_layer.gates.get(b)) {
-    //                                 if *bottom_a == *a_gate && *bottom_b == *b_gate && matches!(current_gate.executor, ExecutorGateEnum::Mul(_)) {
-    //                                     evals.push(F::one());
-    //                                 } else {
-    //                                     evals.push(F::zero());
-    //                                 }
-    //                             } else {
-    //                                 evals.push(F::zero());
-    //                             }
-    //                         }
-    //                     };
-    //                 } else {
-    //                     evals.push(F::zero());
-    //                 }
-    //             }
-    //         }
-    //     }
-    //
-    //     println!("mul evals {:?}", evals);
-    //
-    //     DenseMultilinearExtension::from_evaluations_vec(vars_num + 2 * bottom_vars_num, evals)
-    // }
-
     fn add(&self, layer_i: usize, gate_i: usize, inputs: GateInput<F>) -> bool {
         if let Some(gate) = self.get_gate_for_inputs(layer_i, gate_i, inputs) {
             return match gate.executor {
@@ -737,6 +553,43 @@ impl<'a, F: Field> Circuit<'a, F> {
         }
 
         None
+    }
+
+    fn get_bottom_layer_poly<S: SumCheckPoly<F>>(
+        &self,
+        layer_i: usize,
+        solution_vec: &Vec<Vec<F>>,
+        ri: &[F],
+    ) -> RoundPoly<F> {
+        let bottom_layer_i = layer_i - 1;
+
+        let add_poly = self.add_i(bottom_layer_i);
+        let mul_poly = self.mul_i(bottom_layer_i);
+        let Wi_1 = interpolate(&solution_vec[bottom_layer_i]);
+
+        let add_fixed = MultilinearExtension::fix_variables(&add_poly, &ri);
+        let mul_fixed = MultilinearExtension::fix_variables(&mul_poly, &ri);
+
+        let sc_poly = LayerRoundPoly {
+            add_i: add_fixed,
+            mul_i: mul_fixed,
+            Wi_1_a: Wi_1.clone(),
+            Wi_1_b: Wi_1.clone(),
+        };
+
+        RoundPoly::Layer(sc_poly)
+    }
+
+    fn get_inputs_layer_poly(
+        &self,
+        solution_vec: &Vec<Vec<F>>,
+    ) -> RoundPoly<F> {
+        let inputs = solution_vec.first().unwrap();
+        let mut padded = pad_with_zeroes(inputs);
+        let vars_num = padded.len().ilog2();
+        remap_to_reverse_bits_indexing(&mut padded, vars_num as usize);
+
+        RoundPoly::Inputs(interpolate(inputs))
     }
 }
 
@@ -814,20 +667,35 @@ fn prove<F: Field>(
     solution: Solution<F>,
     random_points: &[F],
 ) {
-    let mut spent_points = 0;
+    let outputs = solution.evaluations.last().unwrap();
+    let mut outputs = pad_with_zeroes(outputs);
+    let vars_num = outputs.len().ilog2();
+    remap_to_reverse_bits_indexing(&mut outputs, vars_num as usize);
+
+    let W0 = interpolate(&outputs);
+    let mut spent_points = MultilinearExtension::num_vars(&W0);
+    let mut ri = random_points[..spent_points].to_vec();
+    let mut mi = Polynomial::evaluate(&W0, &ri.to_vec());
+    //
+    // let mut spent_points = 0;
+
     for i in (0..solution.evaluations.len()).rev() {
         // println!("solution.evaluations[i] {:?}", solution.evaluations[i]);
-        let mut padded = pad_with_zeroes(&solution.evaluations[i]);
-        let vars_num = padded.len().ilog2();
-        remap_to_reverse_bits_indexing(&mut padded, vars_num as usize);
+        // let mut padded = pad_with_zeroes(&solution.evaluations[i]);
+        // let vars_num = padded.len().ilog2();
+        // remap_to_reverse_bits_indexing(&mut padded, vars_num as usize);
         // println!("vars_num {}", vars_num);
 
-        let circuit_layer = &circuit.layers[i];
-        let Wi = interpolate(&padded);
+        // let m0 = if i == solution.evaluations.len() - 1 {
+        //     let Wi = interpolate(&padded);
+        //     let m0 = Polynomial::evaluate(&Wi, &ri.to_vec());
+        // }
 
-        let r0 = &random_points[spent_points..MultilinearExtension::num_vars(&Wi) + spent_points];
-        spent_points += r0.len();
-        let m0 = Polynomial::evaluate(&Wi, &r0.to_vec());
+        // let Wi = interpolate(&padded);
+
+        // let ri = &random_points[spent_points..MultilinearExtension::num_vars(&Wi) + spent_points];
+        // spent_points += ri.len();
+        // let m0 = Polynomial::evaluate(&Wi, &ri.to_vec());
 
         let add_poly = circuit.add_i(i);
         let mul_poly = circuit.mul_i(i);
@@ -847,125 +715,108 @@ fn prove<F: Field>(
 
         println!("Wi_1 {:?}", Wi_1);
 
-        if MultilinearExtension::num_vars(&Wi_1) == 2 {
-            println!("Wi_1 (0,0) {:?}", Polynomial::evaluate(&Wi_1, &vec![F::zero(), F::zero()]));
-            println!("Wi_1 (0,1) {:?}", Polynomial::evaluate(&Wi_1, &vec![F::zero(), F::one()]));
-            println!("Wi_1 (1,0) {:?}", Polynomial::evaluate(&Wi_1, &vec![F::one(), F::zero()]));
-            println!("Wi_1 (1,1) {:?}", Polynomial::evaluate(&Wi_1, &vec![F::one(), F::one()]));
-        }
+        let add_fixed = MultilinearExtension::fix_variables(&add_poly, &ri);
+        let mul_fixed = MultilinearExtension::fix_variables(&mul_poly, &ri);
 
-        if add_poly.num_vars == 5 {
-            println!("add (0,0,0,0,1) {}", Polynomial::evaluate(&add_poly, &vec![F::zero(), F::zero(), F::zero(), F::zero(), F::one()]));
-            println!("add (1,1,0,1,1) {}", Polynomial::evaluate(&add_poly, &vec![F::one(), F::one(), F::zero(), F::one(), F::one()]));
-            println!("add (1,1,1,1,1) {}", Polynomial::evaluate(&add_poly, &vec![F::one(), F::one(), F::one(), F::one(), F::one()]));
-        }
-
-        let add_fixed = MultilinearExtension::fix_variables(&add_poly, &r0);
-        let mul_fixed = MultilinearExtension::fix_variables(&mul_poly, &r0);
-        println!("r0 {:?}", r0);
-        println!("add fixed {:?}", add_fixed.get_evaluations());
-
-        if add_fixed.num_vars == 4 {
-            println!("add fixed (0,0,0,1) {}", Polynomial::evaluate(&add_fixed, &vec![ F::zero(), F::zero(), F::zero(), F::one()]));
-            println!("add fixed (1,0,1,1) {}", Polynomial::evaluate(&add_fixed, &vec![ F::one(), F::zero(), F::one(), F::one()]));
-        }
-        // println!("Wi_1 {:?}", Wi_1);
-
-        let interpolated = interpolate_round_for_sc(add_fixed.clone(), mul_fixed.clone(), Wi_1.clone());
-        let sc_poly = RoundPoly {
+        let sc_poly = LayerRoundPoly {
             add_i: add_fixed.clone(),
             mul_i: mul_fixed.clone(),
             Wi_1_a: Wi_1.clone(),
             Wi_1_b: Wi_1.clone(),
         };
-        // println!("sc eval {}", sc_poly.evaluate(&[F::zero(), F::one()]));
 
-        println!("m0 {:?}", m0);
-        // println!("interpolated {:?}", interpolated.evaluations);
-        //
-        let test_params = vec![(0,0), (0,1), (1,0), (1,1), (123123123, 456456456)]
-            .into_iter()
-            .map(|(a,b)| (F::from(a), F::from(b)))
-            .collect::<Vec<_>>();
+        println!("mi {:?}", mi);
 
-        // println!("sc evals {:?}", sc_poly.get_evaluations());
-        // println!("interpolated evals {:?}", interpolated.evaluations);
-
-        for (a,b) in test_params {
-            // println!("interpolated ({},{}) {}", a, b, Polynomial::evaluate(&interpolated, &vec![a,b]));
-            // println!(
-            //     "base ({},{}) {}",a,b,
-            //     Polynomial::evaluate(&add_fixed, &vec![a, b]) * (Polynomial::evaluate(&Wi_1, &vec![a]) + Polynomial::evaluate(&Wi_1, &vec![b]))
-            //         + Polynomial::evaluate(&mul_fixed, &vec![a, b]) * (Polynomial::evaluate(&Wi_1, &vec![a]) * Polynomial::evaluate(&Wi_1, &vec![b]))
-            // );
-            // println!("sc ({}, {}) {}", a, b, sc_poly.evaluate(&vec![a, b]));
-        }
-
-        // let partial = sc_poly.get_partial_sum_poly();
-        // let partial_0 = partial.evaluate(&F::zero());
-        // let partial_1 = partial.evaluate(&F::one());
-        // println!("partial(0) {:?}", partial_0);
-        // println!("partial(1) {:?}", partial_1);
-        // println!("partial {}", partial_0 + partial_1);
-        // println!("sc sum evals {}", sc_poly.get_evaluations().iter().sum::<F>());
-        //
-        // let sc_poly = sc_poly.fix_variables(&[F::from(999888)]);
-        // let partial = sc_poly.get_partial_sum_poly();
-        // let partial_0 = partial.evaluate(&F::zero());
-        // let partial_1 = partial.evaluate(&F::one());
-        // println!("partial(0) {:?}", partial_0);
-        // println!("partial(1) {:?}", partial_1);
-        // println!("partial {}", partial_0 + partial_1);
-        // println!("sc sum evals {}", sc_poly.get_evaluations().iter().sum::<F>());
-
-
-
-        let (used_r, used_polys) = sumcheck::prove_2(sc_poly.clone());
-        // let (used_r_inter, used_poly_inter) = sumcheck::prove(interpolated.clone());
-        // println!("used_polys {:?}", used_polys);
+        let (used_r, used_polys) = sumcheck::prove_2(sc_poly.clone(), mi);
 
         let (b, c) = used_r.split_at(used_r.len() / 2);
         let l = line(b, c);
 
-        // println!("l {:?}", l[0]);
-        // println!("l(0) {}", l[0].evaluate(&F::zero()));
-        // println!("l(1) {}", l[0].evaluate(&F::one()));
-        // println!("b {:?}", b[0]);
-        // println!("c {:?}", c[0]);
-
-        let q = restrict_poly(l, Wi_1.clone());
+        let q = restrict_poly(&l, Wi_1.clone());
         let q_0 = q.evaluate(&F::zero());
         let q_1 = q.evaluate(&F::one());
 
-        // println!("q_0 {:?}", q_0);
-        // println!("q_1 {:?}", q_1);
-        // // println!("q_sum {:?}", q_0 + q_1);
-        // println!("Wi_1_b {}", Polynomial::evaluate(&Wi_1, &b.to_vec()));
-        // println!("Wi_1_c {}", Polynomial::evaluate(&Wi_1, &c.to_vec()));
-
         let final_poly_eval_prover = Polynomial::evaluate(&add_fixed, &used_r) * (q_0 + q_1) + Polynomial::evaluate(&mul_fixed, &used_r) * (q_0 * q_1);
-        let final_poly_eval_prover = Polynomial::evaluate(&add_fixed, &used_r) * (Polynomial::evaluate(&Wi_1, &b.to_vec()) + Polynomial::evaluate(&Wi_1, &c.to_vec()))
-            + Polynomial::evaluate(&mul_fixed, &used_r) * (Polynomial::evaluate(&Wi_1, &b.to_vec()) * Polynomial::evaluate(&Wi_1, &c.to_vec()));
-
-        println!("final_poly_eval_prover {:?}", final_poly_eval_prover);
-        // println!("interpolared {:?}", Polynomial::evaluate(&interpolated, &used_r));
         let last_poly = used_polys.last().unwrap();
-        // println!("last poly {:?}", last_poly);
-        println!("last poly eval {:?}", last_poly.evaluate(&used_r.last().unwrap()));
-        // println!("inter last poly eval {}", used_poly_inter.last().unwrap().evaluate(&used_r.last().unwrap()));
-        println!("last poly sum 01 {}\n", last_poly.evaluate(&F::zero()) + last_poly.evaluate(&F::one()));
+
+        assert_eq!(last_poly.evaluate(&used_r.last().unwrap()), final_poly_eval_prover);
+        
+        let r_star = random_points[spent_points];
+        spent_points += 1;
+        
+        ri = l.iter().map(|li| li.evaluate(&r_star)).collect();
+        mi = q.evaluate(&r_star);
     }
-    
-    // println!("W0 {:?}", W0);
-    // println!("W0_0 {}", W0.evaluate(&vec![F::from(0), F::from(0)]));
-    // println!("W0_0 {}", W0.evaluate(&vec![F::from(0), F::from(1)]));
-    // println!("W0_0 {}", W0.evaluate(&vec![F::from(1), F::from(0)]));
-    // println!("W0_0 {}", W0.evaluate(&vec![F::from(1), F::from(1)]));
-    // println!("m0 {}", m0);
+
+
+    // for i in (0..solution.evaluations.len()).rev() {
+    //     // println!("solution.evaluations[i] {:?}", solution.evaluations[i]);
+    //     let mut padded = pad_with_zeroes(&solution.evaluations[i]);
+    //     let vars_num = padded.len().ilog2();
+    //     remap_to_reverse_bits_indexing(&mut padded, vars_num as usize);
+    //     // println!("vars_num {}", vars_num);
+    //
+    //     // let m0 = if i == solution.evaluations.len() - 1 {
+    //     //     let Wi = interpolate(&padded);
+    //     //     let m0 = Polynomial::evaluate(&Wi, &ri.to_vec());
+    //     // }
+    //
+    //     let Wi = interpolate(&padded);
+    //
+    //     let ri = &random_points[spent_points..MultilinearExtension::num_vars(&Wi) + spent_points];
+    //     spent_points += ri.len();
+    //     let m0 = Polynomial::evaluate(&Wi, &ri.to_vec());
+    //
+    //     let add_poly = circuit.add_i(i);
+    //     let mul_poly = circuit.mul_i(i);
+    //     let Wi_1 = {
+    //         if i == 0 {
+    //             // println!("solution.inputs {:?}", solution.inputs);
+    //             // println!("interpolate(&solution.inputs) {:?}", interpolate(&pad_with_zeroes(&solution.inputs)));
+    //             let mut wi_1_evals = pad_with_zeroes(&solution.inputs);
+    //             let len = wi_1_evals.len();
+    //             remap_to_reverse_bits_indexing(&mut wi_1_evals, len.ilog2() as usize);
+    //             let res = interpolate(&wi_1_evals);
+    //             res
+    //         } else {
+    //             interpolate(&solution.evaluations[i - 1])
+    //         }
+    //     };
+    //
+    //     println!("Wi_1 {:?}", Wi_1);
+    //
+    //     let add_fixed = MultilinearExtension::fix_variables(&add_poly, &ri);
+    //     let mul_fixed = MultilinearExtension::fix_variables(&mul_poly, &ri);
+    //
+    //     let sc_poly = LayerRoundPoly {
+    //         add_i: add_fixed.clone(),
+    //         mul_i: mul_fixed.clone(),
+    //         Wi_1_a: Wi_1.clone(),
+    //         Wi_1_b: Wi_1.clone(),
+    //     };
+    //
+    //     println!("m0 {:?}", m0);
+    //
+    //     let (used_r, used_polys) = sumcheck::prove_2(sc_poly.clone());
+    //
+    //     let (b, c) = used_r.split_at(used_r.len() / 2);
+    //     let l = line(b, c);
+    //
+    //     let q = restrict_poly(l, Wi_1.clone());
+    //     let q_0 = q.evaluate(&F::zero());
+    //     let q_1 = q.evaluate(&F::one());
+    //
+    //     let final_poly_eval_prover = Polynomial::evaluate(&add_fixed, &used_r) * (q_0 + q_1) + Polynomial::evaluate(&mul_fixed, &used_r) * (q_0 * q_1);
+    //     let last_poly = used_polys.last().unwrap();
+    //
+    //     assert_eq!(last_poly.evaluate(&used_r.last().unwrap()), final_poly_eval_prover);
+    // }
 }
 
 // l(t) = (1 - t) * b + t * c = b + t * (c - b)
 fn line<F: Field>(b: &[F], c: &[F]) -> Vec<DensePolynomial<F>> {
+    assert_eq!(b.len(), c.len());
+
     let mut polys = vec![];
     for (b, c) in b.iter().zip(c.iter()) {
         polys.push(DensePolynomial::from_coefficients_slice(&[*b, *c - *b]));
@@ -976,7 +827,7 @@ fn line<F: Field>(b: &[F], c: &[F]) -> Vec<DensePolynomial<F>> {
 
 // f(x_1, x_2) | l(t) = f_l(x_1(t), x_2(t))
 fn restrict_poly<F: Field>(
-    line: Vec<DensePolynomial<F>>,
+    line: &Vec<DensePolynomial<F>>,
     w: DenseMultilinearExtension<F>,
 ) -> DensePolynomial<F> {
     let num_vars = MultilinearExtension::num_vars(&w);
@@ -1025,16 +876,10 @@ fn pad_with_zeroes<F: Field>(evaluations: &[F]) -> Vec<F> {
 }
 
 fn interpolate<F: Field>(evaluations: &[F]) -> DenseMultilinearExtension<F> {
-    // let lagrange_polys = get_lagrange_polys(evaluations.len() as u64);
-    // F::zero();
-
     DenseMultilinearExtension::from_evaluations_slice(
         evaluations.len().ilog2() as usize,
         evaluations,
     )
-    
-    
-    // DenseMultilinearExtension::from_evaluations_vec(0, vec![])
 }
 
 fn get_lagrange_polys<F: Field>(evaluations_count: usize) -> Vec<DenseMultilinearExtension<F>> {
@@ -1182,7 +1027,7 @@ mod tests {
         DenseMultilinearExtension::from_evaluations_vec(nvars, evals)
     }
 
-    fn get_test_round_poly_2_vars<F: Field>() -> RoundPoly<F> {
+    fn get_test_round_poly_2_vars<F: Field>() -> LayerRoundPoly<F> {
         let add_i = DenseMultilinearExtension::from_evaluations_vec(
             2,
             vec![0,0,0,0].into_iter().map(|e| F::from(e as u64)).collect::<Vec<_>>(),
@@ -1195,7 +1040,7 @@ mod tests {
             1,
             vec![210, 320].into_iter().map(|e| F::from(e as u64)).collect::<Vec<_>>(),
         );
-        RoundPoly {
+        LayerRoundPoly {
             add_i,
             mul_i,
             Wi_1_a: Wi_1.clone(),
@@ -1203,7 +1048,7 @@ mod tests {
         }
     }
 
-    fn get_test_round_poly_4_vars<F: Field>() -> RoundPoly<F> {
+    fn get_test_round_poly_4_vars<F: Field>() -> LayerRoundPoly<F> {
         let add_i = DenseMultilinearExtension::from_evaluations_vec(
             5,
             (0..32).into_iter().map(|e| F::from((e == 16 || e == 27) as u64)).collect::<Vec<_>>(),
@@ -1227,7 +1072,7 @@ mod tests {
             // println!("bits {:?} res {:?}", bits, eval);
         }
 
-        RoundPoly {
+        LayerRoundPoly {
             add_i: MultilinearExtension::fix_variables(&add_i, &[F::from(3)]),
             mul_i: MultilinearExtension::fix_variables(&mul_i, &[F::from(3)]),
             Wi_1_a: Wi_1.clone(),
@@ -1317,7 +1162,7 @@ mod tests {
         let partial_sum_poly_1 = round_poly.get_partial_sum_poly();
 
         assert_eq!(partial_sum_poly_1.coeffs, [Fr::from(-420), Fr::from(1330), Fr::from(50)]);
-        
+
         let round_poly = round_poly.fix_variables(&[Fr::from(4)]);
         let partial_sum_poly_2 = round_poly.get_partial_sum_poly();
 
@@ -1437,5 +1282,42 @@ mod tests {
         assert_eq!(a_eval_params, 1);
         assert_eq!(b_eval_params, 2);
         assert_eq!(evals[1], (0b0001usize, 0b0000usize, 0b0001usize));
+    }
+
+    #[test]
+    fn line_test() {
+        let b = &[Fr::from(3), Fr::from(7)];
+        let c = &[Fr::from(4), Fr::from(5)];
+        let l = line(b, c);
+
+        assert_eq!(l.len(), 2);
+        assert_eq!(l[0].coeffs, [Fr::from(3), Fr::one()]);
+        assert_eq!(l[1].coeffs, [Fr::from(7), Fr::from(-2)]);
+    }
+
+    #[test]
+    fn restrict_to_line_test() {
+        let b = &[Fr::from(3), Fr::from(7)];
+        let c = &[Fr::from(4), Fr::from(5)];
+        let l = line(b, c);
+        let w = DenseMultilinearExtension::from_evaluations_vec(
+            2,
+            vec![10, 20, 200, 300].into_iter().map(Fr::from).collect(),
+        );
+
+        let w_restricted = restrict_poly(&l, w.clone());
+        let r_star = Fr::from(12);
+
+        let l_evals = l.iter().map(|li| li.evaluate(&r_star)).collect::<Vec<_>>();
+
+        assert_eq!(l_evals.len(), 2);
+        assert_eq!(l_evals[0], Fr::from(15));
+        assert_eq!(l_evals[1], Fr::from(-17));
+
+        let w_r_star = ark_poly::Polynomial::evaluate(&w, &l_evals);
+        assert_eq!(w_r_star, Fr::from(-26020));
+        
+        let w_restricted_r_star = w_restricted.evaluate(&r_star);
+        assert_eq!(w_restricted_r_star, w_r_star);
     }
 }

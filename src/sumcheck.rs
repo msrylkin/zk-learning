@@ -121,16 +121,15 @@ fn prove_for_val<F: Field, S: SumCheckPoly<F> + Clone>(poly: S) {
     // println!("")
 }
 
+
+
 pub fn prove_2<F: Field, S: SumCheckPoly<F> + Clone + Debug>(
     poly: S,
     H: F,
 ) -> (Vec<F>, Vec<DensePolynomial<F>>) {
-    let random_points = vec![32,23,35,48].into_iter()
+    let random_points = vec![3,4,35,48].into_iter()
         .map(F::from)
         .collect::<Vec<_>>();
-    // let H = poly.get_evaluations().iter().sum::<F>();
-    println!("poly {:?} vnum {}", poly.get_evaluations(), poly.num_vars());
-    println!("H {}", H);
     let num_vars = poly.num_vars();
 
     // round 1
@@ -138,9 +137,6 @@ pub fn prove_2<F: Field, S: SumCheckPoly<F> + Clone + Debug>(
     let g1_0 = partial_sum_poly.evaluate(&F::zero());
     let g1_1 = partial_sum_poly.evaluate(&F::one());
 
-    println!("round 0\npartial_sum_poly {:?}\ng1_0 {}\ng1_1 {}", partial_sum_poly, g1_0, g1_1);
-
-    // assert_eq!(partial_sum_poly.degree(), 2);
     assert_eq!(H, g1_0 + g1_1);
 
     let mut r_vals = vec![];
@@ -163,7 +159,6 @@ pub fn prove_2<F: Field, S: SumCheckPoly<F> + Clone + Debug>(
         let r = r_vals.last().unwrap().clone();
         let previous_poly_at_r = previous_partial_sum_poly.evaluate(&r);
 
-        // assert_eq!(partial_sum_poly.degree(), 1);
         assert_eq!(g1_1 + g1_0, previous_poly_at_r);
 
         previous_partial_sum_poly = partial_sum_poly.clone();
@@ -174,31 +169,18 @@ pub fn prove_2<F: Field, S: SumCheckPoly<F> + Clone + Debug>(
 
     let last_partial_sum_poly = current_poly.get_partial_sum_poly();
     
-    println!("last partial sum poly {:?}", last_partial_sum_poly);
     let gv_0 = last_partial_sum_poly.evaluate(&F::zero());
     let gv_1 = last_partial_sum_poly.evaluate(&F::one());
-    println!("gv_0 {}", gv_0);
-    println!("gv_1 {}", gv_1);
     let g_v_1_r = previous_partial_sum_poly.evaluate(r_vals.last().unwrap());
-    println!("previous_partial_sum_poly {:?}", previous_partial_sum_poly);
     
     assert_eq!(gv_0 + gv_1, g_v_1_r);
-    
-    // -12719300 52435875175126190479447740508185965837690552500527637822603658699938568465213
-    // -24282300 52435875175126190479447740508185965837690552500527637822603658699938556902213
 
     let last_r = F::from(100);
     r_vals.push(last_r);
-    println!("r_vals {:?}", r_vals);
     previous_partial_sum_poly = last_partial_sum_poly.clone();
     partial_sum_polys.push(last_partial_sum_poly.clone());
 
     let last_eval = poly.evaluate(&r_vals.clone());
-
-    println!("partial_sum_polys {:?}", partial_sum_polys);
-    println!("current_poly varsnum {}", current_poly.num_vars());
-    println!("las partial sum poly {:?}", last_partial_sum_poly);
-    println!("las partial sum poly eval {}", last_partial_sum_poly.evaluate(&last_r));
 
     assert_eq!(previous_partial_sum_poly.evaluate(&last_r), last_eval);
 

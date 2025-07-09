@@ -86,6 +86,7 @@ struct LayerRoundPoly<F: Field> {
     Wi_1_b: DenseMultilinearExtension<F>,
 }
 
+#[derive(Debug, Clone)]
 struct GKRFinalOracle<F: Field> {
     mul_i: DenseMultilinearExtension<F>,
     add_i: DenseMultilinearExtension<F>,
@@ -652,23 +653,140 @@ pub fn test_gkr() {
         .map(Fr::from)
         .collect::<Vec<_>>();
 
-    prove(circuit, solution, &random_points);
+    let gkr_proof = prove2(&circuit, &solution, &random_points);
+    verify(circuit, &gkr_proof);
 }
 
 fn verify<F: Field>(
     circuit: Circuit<F>,
+    proof: &GKRProof<F>,
 ) {
-    
+    let mut mi = Polynomial::evaluate(&proof.W0, &proof.r0);
+    let mut ri = proof.r0.clone();
+
+    for (i, GKRProofLayer { q, r_star, sumcheck_proof }) in proof.layers.iter().enumerate().rev() {
+        let add_poly = circuit.add_i(i);
+        let mul_poly = circuit.mul_i(i);
+        let add_fixed = MultilinearExtension::fix_variables(&add_poly, &ri);
+        let mul_fixed = MultilinearExtension::fix_variables(&mul_poly, &ri);
+        let mut used_r = sumcheck_proof.steps
+            .iter()
+            .map(|step| step.r)
+            .collect::<Vec<_>>();
+        used_r.push(sumcheck_proof.last_round_r);
+        let (b, c) = used_r.split_at(used_r.len() / 2);
+        let l = line(b, c);
+
+        let final_oracle = GKRFinalOracle::new(add_fixed, mul_fixed, q.clone());
+
+        sumcheck::verify(&final_oracle, &sumcheck_proof, mi);
+
+        ri = l.iter().map(|li| li.evaluate(r_star)).collect::<Vec<_>>();
+        mi = q.evaluate(r_star);
+    }
+
+    let mut inputs = pad_with_zeroes(&proof.inputs);
+    let len = inputs.len();
+    remap_to_reverse_bits_indexing(&mut inputs, len.ilog2() as usize);
+    let last_w = interpolate(&inputs);
+    let last_w_r = Polynomial::evaluate(&last_w, &ri.to_vec());
+
+    assert_eq!(last_w_r, mi);
 }
 
+#[derive(Debug)]
 struct GKRProofLayer<F: Field> {
     sumcheck_proof: SumCheckProof<F>,
     r_star: F,
+    q: DensePolynomial<F>,
 }
 
+#[derive(Debug)]
 struct GKRProof<F: Field> {
-    layers: GKRProofLayer<F>,
+    layers: Vec<GKRProofLayer<F>>,
     outputs: Vec<F>,
+    inputs: Vec<F>,
+    r0: Vec<F>,
+    W0: DenseMultilinearExtension<F>,
+}
+
+fn prove2<F: Field>(
+    circuit: &Circuit<F>,
+    solution: &Solution<F>,
+    random_points: &[F],
+) -> GKRProof<F> {
+    let outputs = solution.evaluations.last().unwrap();
+    let mut outputs = pad_with_zeroes(outputs);
+    let vars_num = outputs.len().ilog2();
+    remap_to_reverse_bits_indexing(&mut outputs, vars_num as usize);
+
+    let W0 = interpolate(&outputs);
+    let mut spent_points = MultilinearExtension::num_vars(&W0);
+    let r0 = random_points[..spent_points].to_vec();
+    let mut ri = r0.clone();
+
+    let mut gkr_proof_layers = vec![];
+
+    for i in (0..solution.evaluations.len()).rev() {
+        let add_poly = circuit.add_i(i);
+        let mul_poly = circuit.mul_i(i);
+        let Wi_1 = {
+            if i == 0 {
+                let mut wi_1_evals = pad_with_zeroes(&solution.inputs);
+                let len = wi_1_evals.len();
+                remap_to_reverse_bits_indexing(&mut wi_1_evals, len.ilog2() as usize);
+                let res = interpolate(&wi_1_evals);
+                res
+            } else {
+                let evals = solution.evaluations[i - 1].clone();
+                let mut evals = pad_with_zeroes(&evals);
+                let len = evals.len();
+                remap_to_reverse_bits_indexing(&mut evals, len.ilog2() as usize);
+                interpolate(&evals)
+            }
+        };
+
+        let add_fixed = MultilinearExtension::fix_variables(&add_poly, &ri);
+        let mul_fixed = MultilinearExtension::fix_variables(&mul_poly, &ri);
+
+        let sc_poly = LayerRoundPoly {
+            add_i: add_fixed.clone(),
+            mul_i: mul_fixed.clone(),
+            Wi_1_a: Wi_1.clone(),
+            Wi_1_b: Wi_1.clone(),
+        };
+
+        let sumcheck_proof = sumcheck::prove(&sc_poly);
+
+        let mut used_r = sumcheck_proof.steps
+            .iter()
+            .map(|step| step.r)
+            .collect::<Vec<_>>();
+        used_r.push(sumcheck_proof.last_round_r);
+
+        let (b, c) = used_r.split_at(used_r.len() / 2);
+        let l = line(b, c);
+
+        let q = restrict_poly(&l, Wi_1);
+        let r_star = random_points[spent_points];
+        spent_points += 1;
+
+        ri = l.iter().map(|li| li.evaluate(&r_star)).collect();
+
+        gkr_proof_layers.push(GKRProofLayer {
+            q,
+            sumcheck_proof,
+            r_star,
+        });
+    }
+
+    GKRProof {
+        W0,
+        outputs,
+        inputs: solution.inputs.clone(),
+        layers: gkr_proof_layers.into_iter().rev().collect(),
+        r0,
+    }
 }
 
 fn prove<F: Field>(
@@ -704,8 +822,6 @@ fn prove<F: Field>(
                 interpolate(&evals)
             }
         };
-
-        println!("Wi_1 {:?}", Wi_1);
 
         let add_fixed = MultilinearExtension::fix_variables(&add_poly, &ri);
         let mul_fixed = MultilinearExtension::fix_variables(&mul_poly, &ri);

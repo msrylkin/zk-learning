@@ -13,11 +13,7 @@ pub fn test_sc() {
     
     let sum = poly.iter().sum::<Fr>();
 
-    // prove(poly);
-    let oldres = prove_2_old(poly.clone(), sum);
-    println!("\noldres {:?}", oldres);
-
-    let new_res = prove_2(&poly, sum);
+    let new_res = prove(&poly);
     
     println!("\nnew res {:?}", new_res);
 
@@ -162,74 +158,7 @@ impl<F: Field> SumCheckProof<F> {
     }
 }
 
-pub fn prove_2_old<F: Field, S: SumCheckPoly<F> + Clone + Debug>(
-    poly: S,
-    H: F,
-) -> (Vec<F>, Vec<DensePolynomial<F>>) {
-    let random_points = vec![3,4,35,48].into_iter()
-        .map(F::from)
-        .collect::<Vec<_>>();
-    let num_vars = poly.num_vars();
-
-    // round 1
-    let partial_sum_poly = poly.get_partial_sum_poly();
-    let g1_0 = partial_sum_poly.evaluate(&F::zero());
-    let g1_1 = partial_sum_poly.evaluate(&F::one());
-
-    assert_eq!(H, g1_0 + g1_1);
-
-    let mut r_vals = vec![];
-    let mut partial_sum_polys = vec![];
-
-    r_vals.push(random_points[0].clone());
-
-    let mut current_poly = poly.clone();
-    current_poly = current_poly.fix_variables(&r_vals);
-
-    let mut previous_partial_sum_poly = partial_sum_poly.clone();
-    partial_sum_polys.push(previous_partial_sum_poly.clone());
-
-    for i in 1..(num_vars - 1) {
-        let partial_sum_poly = current_poly.get_partial_sum_poly();
-        let g1_0 = partial_sum_poly.evaluate(&F::zero());
-        let g1_1 = partial_sum_poly.evaluate(&F::one());
-        println!("round {} partial sum poly {:?}", i, partial_sum_poly);
-        println!("round {} r_vals {:?} g1_0 {} g1_1 {} g1_sum {}", i, r_vals, g1_0, g1_1, g1_0 + g1_1);
-        let r = r_vals.last().unwrap().clone();
-        let previous_poly_at_r = previous_partial_sum_poly.evaluate(&r);
-
-        assert_eq!(g1_1 + g1_0, previous_poly_at_r);
-
-        previous_partial_sum_poly = partial_sum_poly.clone();
-        partial_sum_polys.push(previous_partial_sum_poly.clone());
-        r_vals.push(random_points[i].clone());
-        current_poly = current_poly.fix_variables(&[random_points[i].clone()]);
-    }
-
-    let last_partial_sum_poly = current_poly.get_partial_sum_poly();
-
-    let gv_0 = last_partial_sum_poly.evaluate(&F::zero());
-    let gv_1 = last_partial_sum_poly.evaluate(&F::one());
-    let g_v_1_r = previous_partial_sum_poly.evaluate(r_vals.last().unwrap());
-
-    assert_eq!(gv_0 + gv_1, g_v_1_r);
-
-    let last_r = F::from(100);
-    r_vals.push(last_r);
-    previous_partial_sum_poly = last_partial_sum_poly.clone();
-    partial_sum_polys.push(last_partial_sum_poly.clone());
-
-    let last_eval = poly.evaluate(&r_vals.clone());
-
-    assert_eq!(previous_partial_sum_poly.evaluate(&last_r), last_eval);
-
-    (r_vals, partial_sum_polys)
-}
-
-pub fn prove_2<F: Field, S: SumCheckPoly<F> + Clone + Debug>(
-    poly: &S,
-    H: F,
-) -> SumCheckProof<F> {
+pub fn prove<F: Field, S: SumCheckPoly<F> + Clone + Debug>(poly: &S) -> SumCheckProof<F> {
     let random_points = vec![3,4,35,100].into_iter()
         .map(F::from)
         .collect::<Vec<_>>();

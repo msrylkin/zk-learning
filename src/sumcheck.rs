@@ -149,6 +149,18 @@ pub struct SumCheckProof<F: Field> {
 }
 
 impl<F: Field> SumCheckProof<F> {
+    pub fn get_used_randomness(&self) -> Vec<F> {
+        let mut used_r = self.steps
+            .iter()
+            .map(|step| step.r)
+            .collect::<Vec<_>>();
+        used_r.push(self.last_round_r);
+        
+        used_r
+    }
+} 
+
+impl<F: Field> SumCheckProof<F> {
     fn new(first_round_poly: DensePolynomial<F>, last_round_r: F, steps: Vec<SumCheckStep<F>>) -> Self {
         SumCheckProof {
             first_round_poly,

@@ -201,24 +201,6 @@ impl<F: Field> Layer<'_, F> {
     }
 }
 
-fn test_intp<F: Field>(evals: &[F]) -> DensePolynomial<F> {
-    // let mut current_sc_poly = self.clone();
-    // let num_vars = current_sc_poly.num_vars();
-    //
-    // let evals = self.get_evaluations();
-    // println!("evals {:?}", evals);
-
-    let (zeroes, ones) = evals.iter().enumerate().fold((F::zero(), F::zero()), |(zeroes, ones), (i, eval)| {
-        if i % 2 == 0 {
-            (zeroes + eval, ones)
-        } else {
-            (zeroes, ones + eval)
-        }
-    });
-
-    interpolate_univariate_on_evals(&[zeroes, ones])
-}
-
 impl<F: Field> SumCheckPoly<F> for LayerRoundPoly<F> {
     fn get_evaluations(&self) -> Vec<F> {
         let mut res = vec![];
@@ -348,21 +330,6 @@ impl<'a, F: Field> Circuit<'a, F> {
             inputs,
         }
     }
-    
-    fn in_1(&self, gate_i: usize, layer_i: usize) -> usize {
-        self.bottom_left_count(gate_i, layer_i)
-    }
-
-    fn in_2(&self, gate_i: usize, layer_i: usize) -> usize {
-        self.bottom_left_count(gate_i, layer_i) + 1
-    }
-
-    fn bottom_left_count(&self, gate_i: usize, layer_i: usize) -> usize {
-        let layer = &self.layers[layer_i];
-        // let gate = &layer.gates[gate_i];
-
-        gate_i * 2
-    }
 
     fn gates_n_at_layer_i_1(&self, layer_i: usize) -> usize {
         let layer = &self.layers[layer_i];
@@ -388,7 +355,6 @@ impl<'a, F: Field> Circuit<'a, F> {
 
         let layer = &self.layers[layer_i - 1];
 
-
         layer.gates.get(gate_i).map(|gate| *gate)
     }
 
@@ -398,22 +364,14 @@ impl<'a, F: Field> Circuit<'a, F> {
         if !gates_n.is_power_of_two() {
             gates_n = gates_n.next_power_of_two();
         }
-        // let
         let vars_num = f64::from(gates_n as u32).log2().ceil() as usize;
-        // println!("gates_num {}", gates_n);
-        // println!("vars {}", vars_num);
-        // println!("trailing zeroes {}", (gates_n as u64).trailing_zeros());
         let domain_size = 1 << vars_num;
-        // println!("domain_size {}", domain_size);
-        // let bottom_layer = &self.layers[layer_i - 1];
-        // let mut bottom_gates_n = bottom_layer.gates.len();
         let mut bottom_gates_n = self.gates_n_at_layer_i_1(layer_i);
         if !bottom_gates_n.is_power_of_two() {
             bottom_gates_n = bottom_gates_n.next_power_of_two();
         }
         let bottom_vars_num = f64::from(bottom_gates_n as u32).log2().ceil() as usize;
         let bottom_domain_size = 1 << bottom_vars_num;
-        // println!("bottom_gates_n {} bottom_vars_num {} bottom_domain_size {}", bottom_gates_n, bottom_vars_num, bottom_domain_size);
 
         let mut evals = vec![];
 
@@ -450,8 +408,6 @@ impl<'a, F: Field> Circuit<'a, F> {
         }
 
         remap_to_reverse_bits_indexing(&mut evals, vars_num + 2 * bottom_vars_num);
-
-        println!("mul evals {:?}", evals);
 
         DenseMultilinearExtension::from_evaluations_vec(vars_num + 2 * bottom_vars_num, evals)
     }
@@ -507,86 +463,8 @@ impl<'a, F: Field> Circuit<'a, F> {
 
         remap_to_reverse_bits_indexing(&mut evals, vars_num + 2 * bottom_vars_num);
 
-        println!("evals {:?}", evals);
-
         DenseMultilinearExtension::from_evaluations_vec(vars_num + 2 * bottom_vars_num, evals)
     }
-
-    fn add(&self, layer_i: usize, gate_i: usize, inputs: GateInput<F>) -> bool {
-        if let Some(gate) = self.get_gate_for_inputs(layer_i, gate_i, inputs) {
-            return match gate.executor {
-                ExecutorGateEnum::Add(_) => true,
-                _ => false,
-            }
-        }
-
-        false
-    }
-
-    fn mul(&self, layer_i: usize, gate_i: usize, inputs: GateInput<F>) -> bool {
-        if let Some(gate) = self.get_gate_for_inputs(layer_i, gate_i, inputs) {
-            return match gate.executor {
-                ExecutorGateEnum::Mul(_) => true,
-                _ => false,
-            }
-        }
-
-        false
-    }
-
-    fn get_gate_for_inputs(&self, layer_i: usize, gate_i: usize, inputs: GateInput<F>) -> Option<&Gate<'a, F>> {
-        let layer = &self.layers[layer_i];
-        let gate = layer.gates[gate_i];
-
-        let left_in = self.in_1(gate_i, layer_i);
-        let right_in = self.in_2(gate_i, layer_i);
-
-        // if left == left_in && right == right_in {
-        //     return Some(gate);
-        // }
-        if *gate.inputs == inputs {
-            return Some(gate);
-        }
-
-        None
-    }
-
-    // fn get_bottom_layer_poly<S: SumCheckPoly<F>>(
-    //     &self,
-    //     layer_i: usize,
-    //     solution_vec: &Vec<Vec<F>>,
-    //     ri: &[F],
-    // ) -> RoundPoly<F> {
-    //     let bottom_layer_i = layer_i - 1;
-    // 
-    //     let add_poly = self.add_i(bottom_layer_i);
-    //     let mul_poly = self.mul_i(bottom_layer_i);
-    //     let Wi_1 = interpolate(&solution_vec[bottom_layer_i]);
-    // 
-    //     let add_fixed = MultilinearExtension::fix_variables(&add_poly, &ri);
-    //     let mul_fixed = MultilinearExtension::fix_variables(&mul_poly, &ri);
-    // 
-    //     let sc_poly = LayerRoundPoly {
-    //         add_i: add_fixed,
-    //         mul_i: mul_fixed,
-    //         Wi_1_a: Wi_1.clone(),
-    //         Wi_1_b: Wi_1.clone(),
-    //     };
-    // 
-    //     RoundPoly::Layer(sc_poly)
-    // }
-    // 
-    // fn get_inputs_layer_poly(
-    //     &self,
-    //     solution_vec: &Vec<Vec<F>>,
-    // ) -> RoundPoly<F> {
-    //     let inputs = solution_vec.first().unwrap();
-    //     let mut padded = pad_with_zeroes(inputs);
-    //     let vars_num = padded.len().ilog2();
-    //     remap_to_reverse_bits_indexing(&mut padded, vars_num as usize);
-    // 
-    //     RoundPoly::Inputs(interpolate(inputs))
-    // }
 }
 
 fn execute<F: Field>(executor: &ExecutorGateEnum, a: &F, b: &F) -> F {
@@ -653,7 +531,7 @@ pub fn test_gkr() {
         .map(Fr::from)
         .collect::<Vec<_>>();
 
-    let gkr_proof = prove2(&circuit, &solution, &random_points);
+    let gkr_proof = prove(&circuit, &solution, &random_points);
     verify(circuit, &gkr_proof);
 }
 
@@ -669,11 +547,7 @@ fn verify<F: Field>(
         let mul_poly = circuit.mul_i(i);
         let add_fixed = MultilinearExtension::fix_variables(&add_poly, &ri);
         let mul_fixed = MultilinearExtension::fix_variables(&mul_poly, &ri);
-        let mut used_r = sumcheck_proof.steps
-            .iter()
-            .map(|step| step.r)
-            .collect::<Vec<_>>();
-        used_r.push(sumcheck_proof.last_round_r);
+        let used_r = sumcheck_proof.get_used_randomness();
         let (b, c) = used_r.split_at(used_r.len() / 2);
         let l = line(b, c);
 
@@ -710,7 +584,7 @@ struct GKRProof<F: Field> {
     W0: DenseMultilinearExtension<F>,
 }
 
-fn prove2<F: Field>(
+fn prove<F: Field>(
     circuit: &Circuit<F>,
     solution: &Solution<F>,
     random_points: &[F],
@@ -758,12 +632,8 @@ fn prove2<F: Field>(
 
         let sumcheck_proof = sumcheck::prove(&sc_poly);
 
-        let mut used_r = sumcheck_proof.steps
-            .iter()
-            .map(|step| step.r)
-            .collect::<Vec<_>>();
-        used_r.push(sumcheck_proof.last_round_r);
-
+        let used_r = sumcheck_proof.get_used_randomness();
+        
         let (b, c) = used_r.split_at(used_r.len() / 2);
         let l = line(b, c);
 
@@ -787,96 +657,6 @@ fn prove2<F: Field>(
         layers: gkr_proof_layers.into_iter().rev().collect(),
         r0,
     }
-}
-
-fn prove<F: Field>(
-    circuit: Circuit<F>,
-    solution: Solution<F>,
-    random_points: &[F],
-) {
-    let outputs = solution.evaluations.last().unwrap();
-    let mut outputs = pad_with_zeroes(outputs);
-    let vars_num = outputs.len().ilog2();
-    remap_to_reverse_bits_indexing(&mut outputs, vars_num as usize);
-
-    let W0 = interpolate(&outputs);
-    let mut spent_points = MultilinearExtension::num_vars(&W0);
-    let mut ri = random_points[..spent_points].to_vec();
-    let mut mi = Polynomial::evaluate(&W0, &ri.to_vec());
-
-    for i in (0..solution.evaluations.len()).rev() {
-        let add_poly = circuit.add_i(i);
-        let mul_poly = circuit.mul_i(i);
-        let Wi_1 = {
-            if i == 0 {
-                let mut wi_1_evals = pad_with_zeroes(&solution.inputs);
-                let len = wi_1_evals.len();
-                remap_to_reverse_bits_indexing(&mut wi_1_evals, len.ilog2() as usize);
-                let res = interpolate(&wi_1_evals);
-                res
-            } else {
-                let evals = solution.evaluations[i - 1].clone();
-                let mut evals = pad_with_zeroes(&evals);
-                let len = evals.len();
-                remap_to_reverse_bits_indexing(&mut evals, len.ilog2() as usize);
-                interpolate(&evals)
-            }
-        };
-
-        let add_fixed = MultilinearExtension::fix_variables(&add_poly, &ri);
-        let mul_fixed = MultilinearExtension::fix_variables(&mul_poly, &ri);
-
-        let sc_poly = LayerRoundPoly {
-            add_i: add_fixed.clone(),
-            mul_i: mul_fixed.clone(),
-            Wi_1_a: Wi_1.clone(),
-            Wi_1_b: Wi_1.clone(),
-        };
-
-        println!("mi {:?}", mi);
-
-        // let (used_r, used_polys) = sumcheck::prove_2_old(sc_poly.clone(), mi);
-        let sumcheck_proof = sumcheck::prove(&sc_poly);
-        
-        let mut used_r = sumcheck_proof.steps
-            .iter()
-            .map(|step| step.r)
-            .collect::<Vec<_>>();
-        used_r.push(sumcheck_proof.last_round_r);
-        
-        println!("used_r {:?}", used_r);
-
-        let (b, c) = used_r.split_at(used_r.len() / 2);
-        let l = line(b, c);
-
-        let q = restrict_poly(&l, Wi_1);
-
-        let final_oracle = GKRFinalOracle::new(add_fixed, mul_fixed, q.clone());
-        let q_0 = q.evaluate(&F::zero());
-        let q_1 = q.evaluate(&F::one());
-
-        // let final_poly_eval_prover = Polynomial::evaluate(&add_fixed, &used_r) * (q_0 + q_1) + Polynomial::evaluate(&mul_fixed, &used_r) * (q_0 * q_1);
-        sumcheck::verify(&final_oracle, &sumcheck_proof, mi);
-
-        // let last_poly = &sumcheck_proof.steps.last().unwrap().poly;
-
-        // assert_eq!(last_poly.evaluate(&used_r.last().unwrap()), final_poly_eval_prover);
-        
-        let r_star = random_points[spent_points];
-        spent_points += 1;
-        
-        ri = l.iter().map(|li| li.evaluate(&r_star)).collect();
-        mi = q.evaluate(&r_star);
-    }
-    
-    let inputs = solution.inputs.clone();
-    let mut inputs = pad_with_zeroes(&solution.inputs);
-    let len = inputs.len();
-    remap_to_reverse_bits_indexing(&mut inputs, len.ilog2() as usize);
-    let last_w = interpolate(&inputs);
-    let last_w_r = Polynomial::evaluate(&last_w, &ri.to_vec());
-    
-    assert_eq!(last_w_r, mi);
 }
 
 // l(t) = (1 - t) * b + t * c = b + t * (c - b)
@@ -1186,9 +966,6 @@ mod tests {
         let a_mask = 0b0001;
         let b_mask = 0b0001;
 
-        println!("round ad {:?}", round_poly.add_i.evaluations);
-        println!("round ad(0101) - {:?}", ark_poly::Polynomial::evaluate(&round_poly.add_i, &vec![Fr::zero(), Fr::one(), Fr::zero(), Fr::one()]));
-        println!("round ad(1101) - {:?}", ark_poly::Polynomial::evaluate(&round_poly.add_i, &vec![Fr::one(), Fr::one(), Fr::zero(), Fr::one()]));
         let add_uni = to_two_or_one_degree(&round_poly.add_i, mask, 3);
         let mul_uni = to_two_or_one_degree(&round_poly.mul_i, mask, 3);
         let Wi_1_a_uni = to_two_or_one_degree(&round_poly.Wi_1_a, a_mask, 1);

@@ -72,6 +72,10 @@ impl<F: Field> SumCheckPoly<F> for DenseMultilinearExtension<F> {
     }
 }
 
+pub trait OracleEvaluation<F: Field> {
+    fn final_eval(&self, r: &[F]) -> F;
+}
+
 pub trait SumCheckPoly<F: Field> {
     fn get_evaluations(&self) -> Vec<F>;
 
@@ -132,11 +136,30 @@ pub struct SumCheckStep<F: Field> {
     pub r: F,
 }
 
+impl<F: Field> SumCheckStep<F> {
+    fn new(poly: DensePolynomial<F>, r: F) -> Self {
+        SumCheckStep {
+            poly,
+            r
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct SumCheckProof<F: Field> {
     pub first_round_poly: DensePolynomial<F>,
     pub last_round_r: F,
     pub steps: Vec<SumCheckStep<F>>
+}
+
+impl<F: Field> SumCheckProof<F> {
+    fn new(first_round_poly: DensePolynomial<F>, last_round_r: F, steps: Vec<SumCheckStep<F>>) -> Self {
+        SumCheckProof {
+            first_round_poly,
+            last_round_r,
+            steps,
+        }
+    }
 }
 
 pub fn prove_2_old<F: Field, S: SumCheckPoly<F> + Clone + Debug>(
@@ -214,10 +237,10 @@ pub fn prove_2<F: Field, S: SumCheckPoly<F> + Clone + Debug>(
 
     // round 1
     let first_round_poly = poly.get_partial_sum_poly();
-    let g1_0 = first_round_poly.evaluate(&F::zero());
-    let g1_1 = first_round_poly.evaluate(&F::one());
+    // let g1_0 = first_round_poly.evaluate(&F::zero());
+    // let g1_1 = first_round_poly.evaluate(&F::one());
 
-    assert_eq!(H, g1_0 + g1_1);
+    // assert_eq!(H, g1_0 + g1_1);
     
     let mut sc_steps = vec![];
     
@@ -225,97 +248,63 @@ pub fn prove_2<F: Field, S: SumCheckPoly<F> + Clone + Debug>(
     let mut current_r = random_points[0];
 
     for i in 1..num_vars {
-        let previous_partial_sum_poly = current_poly.get_partial_sum_poly();
-        current_poly = current_poly.fix_variables(&[current_r]);
-
-        let partial_sum_poly = current_poly.get_partial_sum_poly();
-        let g1_0 = partial_sum_poly.evaluate(&F::zero());
-        let g1_1 = partial_sum_poly.evaluate(&F::one());
-        let previous_poly_at_r = previous_partial_sum_poly.evaluate(&current_r);
-
-        assert_eq!(g1_1 + g1_0, previous_poly_at_r);
+        // let previous_partial_sum_poly = current_poly.get_partial_sum_poly();
         
-        sc_steps.push(SumCheckStep {
-            poly: partial_sum_poly,
-            r: current_r,
-        });
+        current_poly = current_poly.fix_variables(&[current_r]);
+        let partial_sum_poly = current_poly.get_partial_sum_poly();
+        
+        // let gi_0 = partial_sum_poly.evaluate(&F::zero());
+        // let gi_1 = partial_sum_poly.evaluate(&F::one());
+        // let previous_poly_at_r = previous_partial_sum_poly.evaluate(&current_r);
+
+        // assert_eq!(gi_1 + gi_0, previous_poly_at_r);
+        
+        sc_steps.push(SumCheckStep::new(partial_sum_poly, current_r));
         
         current_r = random_points[i];
     }
     
-    let mut r_vals = sc_steps
+    // let mut r_vals = sc_steps
+    //     .iter()
+    //     .map(|step| step.r)
+    //     .collect::<Vec<_>>();
+    // r_vals.push(current_r);
+
+    // let last_eval = poly.evaluate(&r_vals);
+
+    // assert_eq!(sc_steps.last().unwrap().poly.evaluate(&current_r), last_eval);
+
+    SumCheckProof::new(first_round_poly, current_r, sc_steps)
+}
+
+pub fn verify<F: Field, O: OracleEvaluation<F>>(oracle: &O, proof: &SumCheckProof<F>, H: F) {
+    let g1_0 = proof.first_round_poly.evaluate(&F::zero());
+    let g1_1 = proof.first_round_poly.evaluate(&F::one());
+    
+    assert_eq!(g1_0 + g1_1, H);
+    
+    let mut previous_poly = &proof.first_round_poly;
+    
+    for step in &proof.steps {
+        let previous_poly_at_r = previous_poly.evaluate(&step.r);
+        let gi_0 = step.poly.evaluate(&F::zero());
+        let gi_1 = step.poly.evaluate(&F::one());
+        
+        assert_eq!(gi_0 + gi_1, previous_poly_at_r);
+        
+        previous_poly = &step.poly;
+    }
+
+    let mut r_vals = proof.steps
         .iter()
         .map(|step| step.r)
         .collect::<Vec<_>>();
-    r_vals.push(current_r);
-
-    let last_eval = poly.evaluate(&r_vals);
-
-    assert_eq!(sc_steps.last().unwrap().poly.evaluate(&current_r), last_eval);
-
-    SumCheckProof {
-        first_round_poly,
-        last_round_r: current_r,
-        steps: sc_steps,
-    }
-}
-
-pub fn prove<F: Field, S: SumCheckPoly<F> + Clone>(
-    // poly: DenseMultilinearExtension<Fr>,
-    poly: S,
-) -> (Vec<F>, Vec<DensePolynomial<F>>) {
-    let mut current_poly = poly.clone();
-    // let mut current_poly = poly;
-    // TODO: Fiat-Shamir
-    let random_points = vec![21,23,35,48].into_iter()
-        .map(F::from)
-        .collect::<Vec<_>>();
-    let mut current_sum = current_poly.get_evaluations().iter().sum::<F>();
-    let mut total_rounds = 0;
-
-    let mut used_r = vec![];
-    let mut used_polys = vec![];
-
-    for round in 0..poly.num_vars() {
-        // let partial_sum_poly = get_partial_sum_poly(&current_poly);
-        let partial_sum_poly = current_poly.get_partial_sum_poly();
-        println!("partial_sum_poly {:?}\n", partial_sum_poly);
-        used_polys.push(partial_sum_poly.clone());
-
-        if partial_sum_poly.degree() != 1 {
-            panic!("degree does not match");
-        }
-
-        let eval_0 = partial_sum_poly.evaluate(&F::zero());
-        let eval_1 = partial_sum_poly.evaluate(&F::one());
-
-        let eval_sum = eval_0 + eval_1;
-
-        if eval_sum != current_sum {
-            panic!("sum does not match");
-        }
-
-        let r = random_points[round];
-
-        current_poly = current_poly.fix_variables(&[r]);
-        current_sum = current_poly.get_evaluations().iter().sum::<F>();
-        println!("current_sum {}", current_sum);
-        total_rounds += 1;
-        used_r.push(r);
-    }
-
-    let last_evaluation = current_poly.get_evaluations().pop().unwrap();
-    let points = random_points.into_iter().take(total_rounds).collect::<Vec<_>>();
-    let original_poly_evaluation = poly.evaluate(&points);
-    // println!("points {:?} used_r {:?}", points, used_r);
-
-    if last_evaluation != original_poly_evaluation {
-        panic!("last evaluation not match");
-    }
-
-    println!("last eval {:?}", last_evaluation);
-
-    (used_r, used_polys)
+    r_vals.push(proof.last_round_r);
+    
+    // let last_eval = poly.evaluate(&r_vals);
+    let last_eval = oracle.final_eval(&r_vals);
+    
+    assert_eq!(last_eval, proof.steps.last().unwrap().poly.evaluate(&proof.last_round_r));
 }
 
 pub fn get_partial_sum_poly(

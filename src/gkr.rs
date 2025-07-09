@@ -7,7 +7,7 @@ use ark_poly::univariate::DensePolynomial;
 use ark_std::iterable::Iterable;
 use ark_test_curves::bls12_381::Fr;
 use crate::sumcheck;
-use crate::sumcheck::{interpolate_univariate_on_evals, SumCheckPoly};
+use crate::sumcheck::{interpolate_univariate_on_evals, OracleEvaluation, SumCheckPoly};
 
 trait ExecuteGate<F: Field> {
     fn execute(&self, a: &F, b: &F) -> F;
@@ -88,6 +88,29 @@ struct LayerRoundPoly<F: Field> {
 enum RoundPoly<F: Field> {
     Layer(LayerRoundPoly<F>),
     Inputs(DenseMultilinearExtension<F>),
+}
+
+struct GKRFinalOracle<F: Field> {
+    mul_i: DenseMultilinearExtension<F>,
+    add_i: DenseMultilinearExtension<F>,
+    q: DensePolynomial<F>
+}
+
+impl<F: Field> GKRFinalOracle<F> {
+    fn new(add_i: DenseMultilinearExtension<F>, mul_i: DenseMultilinearExtension<F>, q: DensePolynomial<F>) -> Self {
+        Self { mul_i, add_i, q }
+    }
+}
+
+impl<F: Field> OracleEvaluation<F> for GKRFinalOracle<F> {
+    fn final_eval(&self, r: &[F]) -> F {
+        let q_0 = self.q.evaluate(&F::zero());
+        let q_1 = self.q.evaluate(&F::one());
+        let add_eval = ark_poly::Polynomial::evaluate(&self.add_i, &r.to_vec()) * (q_0 + q_1);
+        let mul_eval = ark_poly::Polynomial::evaluate(&self.mul_i, &r.to_vec()) * (q_0 * q_1);
+        
+        add_eval + mul_eval
+    }
 }
 
 fn get_bits(k: usize, bit_len: usize) -> Vec<usize> {
@@ -716,24 +739,31 @@ fn prove<F: Field>(
 
         // let (used_r, used_polys) = sumcheck::prove_2_old(sc_poly.clone(), mi);
         let sumcheck_proof = sumcheck::prove_2(&sc_poly, mi);
+
         
         let mut used_r = sumcheck_proof.steps
             .iter()
             .map(|step| step.r)
             .collect::<Vec<_>>();
         used_r.push(sumcheck_proof.last_round_r);
+        
+        println!("used_r {:?}", used_r);
 
         let (b, c) = used_r.split_at(used_r.len() / 2);
         let l = line(b, c);
 
-        let q = restrict_poly(&l, Wi_1.clone());
+        let q = restrict_poly(&l, Wi_1);
+
+        let final_oracle = GKRFinalOracle::new(add_fixed, mul_fixed, q.clone());
         let q_0 = q.evaluate(&F::zero());
         let q_1 = q.evaluate(&F::one());
 
-        let final_poly_eval_prover = Polynomial::evaluate(&add_fixed, &used_r) * (q_0 + q_1) + Polynomial::evaluate(&mul_fixed, &used_r) * (q_0 * q_1);
-        let last_poly = &sumcheck_proof.steps.last().unwrap().poly;
+        // let final_poly_eval_prover = Polynomial::evaluate(&add_fixed, &used_r) * (q_0 + q_1) + Polynomial::evaluate(&mul_fixed, &used_r) * (q_0 * q_1);
+        sumcheck::verify(&final_oracle, &sumcheck_proof, mi);
 
-        assert_eq!(last_poly.evaluate(&used_r.last().unwrap()), final_poly_eval_prover);
+        // let last_poly = &sumcheck_proof.steps.last().unwrap().poly;
+
+        // assert_eq!(last_poly.evaluate(&used_r.last().unwrap()), final_poly_eval_prover);
         
         let r_star = random_points[spent_points];
         spent_points += 1;

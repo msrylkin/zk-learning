@@ -6,8 +6,9 @@ use ark_poly::{DenseMultilinearExtension, DenseUVPolynomial, EvaluationDomain, G
 use ark_poly::univariate::DensePolynomial;
 use ark_std::iterable::Iterable;
 use ark_test_curves::bls12_381::Fr;
+use crate::poly_utils::get_reversed_vars_poly;
 use crate::sumcheck;
-use crate::sumcheck::{interpolate_univariate_on_evals, OracleEvaluation, SumCheckPoly};
+use crate::sumcheck::{interpolate_univariate_on_evals, OracleEvaluation, SumCheckPoly, SumCheckProof};
 
 trait ExecuteGate<F: Field> {
     fn execute(&self, a: &F, b: &F) -> F;
@@ -85,11 +86,6 @@ struct LayerRoundPoly<F: Field> {
     Wi_1_b: DenseMultilinearExtension<F>,
 }
 
-enum RoundPoly<F: Field> {
-    Layer(LayerRoundPoly<F>),
-    Inputs(DenseMultilinearExtension<F>),
-}
-
 struct GKRFinalOracle<F: Field> {
     mul_i: DenseMultilinearExtension<F>,
     add_i: DenseMultilinearExtension<F>,
@@ -124,35 +120,15 @@ fn get_bits(k: usize, bit_len: usize) -> Vec<usize> {
     result
 }
 
-pub fn get_reversed_vars_poly<F: Field>(poly: &DenseMultilinearExtension<F>) -> DenseMultilinearExtension<F> {
-    let n = MultilinearExtension::num_vars(poly);
-    let mut res_poly = poly.clone();
-
-
-    if n == 0 || n == 1 {
-        return res_poly;
-    }
-
-    for i in 0..n / 2 {
-        res_poly.relabel_in_place(i, n - i - 1,1);
-    }
-
-    // res_poly.relabel_in_place(0, n / 2, n / 2);
-
-    res_poly
-}
-
 fn to_f<F: Field>(arr: Vec<u64>) -> Vec<F> {
     arr.into_iter().map(F::from).collect()
 }
 
 fn interpolate_or_const<F: Field>(evals: &[F]) -> DensePolynomial<F> {
-    if evals.len() == 1 {
-        DensePolynomial::from_coefficients_slice(evals)
-    } else if evals.len() == 2 {
-        interpolate_univariate_on_evals(evals.try_into().unwrap())
-    } else {
-        panic!("interpolate_or_const")
+    match evals.len() {
+        1 => DensePolynomial::from_coefficients_slice(evals),
+        2 => interpolate_univariate_on_evals(evals.try_into().unwrap()),
+        _ => panic!("wrong evaluations len"),
     }
 }
 
@@ -205,16 +181,12 @@ fn generate_round_poly_eval_parameters(
     let b_mask = (1 << b_vars_fixing) - 1; // 0111
     let a_mask = (1 << a_vars_fixing + b_vars_fixing) - 1 - b_mask; // 1000
 
-    // println!("a_mask {:#08b} b_mask {:#08b}", a_mask, b_mask);
-
     let mut res = vec![];
 
     for i in 0..combined_domain {
         let combined_param = i;
         let b_param = i & b_mask;
         let a_param = (i & a_mask) >> b_vars_fixing;
-
-        // println!("i {:#08b} a_param {:#08b} b_param {:#08b}", i, a_param, b_param);
 
         res.push((combined_param, a_param, b_param))
     }
@@ -578,42 +550,42 @@ impl<'a, F: Field> Circuit<'a, F> {
         None
     }
 
-    fn get_bottom_layer_poly<S: SumCheckPoly<F>>(
-        &self,
-        layer_i: usize,
-        solution_vec: &Vec<Vec<F>>,
-        ri: &[F],
-    ) -> RoundPoly<F> {
-        let bottom_layer_i = layer_i - 1;
-
-        let add_poly = self.add_i(bottom_layer_i);
-        let mul_poly = self.mul_i(bottom_layer_i);
-        let Wi_1 = interpolate(&solution_vec[bottom_layer_i]);
-
-        let add_fixed = MultilinearExtension::fix_variables(&add_poly, &ri);
-        let mul_fixed = MultilinearExtension::fix_variables(&mul_poly, &ri);
-
-        let sc_poly = LayerRoundPoly {
-            add_i: add_fixed,
-            mul_i: mul_fixed,
-            Wi_1_a: Wi_1.clone(),
-            Wi_1_b: Wi_1.clone(),
-        };
-
-        RoundPoly::Layer(sc_poly)
-    }
-
-    fn get_inputs_layer_poly(
-        &self,
-        solution_vec: &Vec<Vec<F>>,
-    ) -> RoundPoly<F> {
-        let inputs = solution_vec.first().unwrap();
-        let mut padded = pad_with_zeroes(inputs);
-        let vars_num = padded.len().ilog2();
-        remap_to_reverse_bits_indexing(&mut padded, vars_num as usize);
-
-        RoundPoly::Inputs(interpolate(inputs))
-    }
+    // fn get_bottom_layer_poly<S: SumCheckPoly<F>>(
+    //     &self,
+    //     layer_i: usize,
+    //     solution_vec: &Vec<Vec<F>>,
+    //     ri: &[F],
+    // ) -> RoundPoly<F> {
+    //     let bottom_layer_i = layer_i - 1;
+    // 
+    //     let add_poly = self.add_i(bottom_layer_i);
+    //     let mul_poly = self.mul_i(bottom_layer_i);
+    //     let Wi_1 = interpolate(&solution_vec[bottom_layer_i]);
+    // 
+    //     let add_fixed = MultilinearExtension::fix_variables(&add_poly, &ri);
+    //     let mul_fixed = MultilinearExtension::fix_variables(&mul_poly, &ri);
+    // 
+    //     let sc_poly = LayerRoundPoly {
+    //         add_i: add_fixed,
+    //         mul_i: mul_fixed,
+    //         Wi_1_a: Wi_1.clone(),
+    //         Wi_1_b: Wi_1.clone(),
+    //     };
+    // 
+    //     RoundPoly::Layer(sc_poly)
+    // }
+    // 
+    // fn get_inputs_layer_poly(
+    //     &self,
+    //     solution_vec: &Vec<Vec<F>>,
+    // ) -> RoundPoly<F> {
+    //     let inputs = solution_vec.first().unwrap();
+    //     let mut padded = pad_with_zeroes(inputs);
+    //     let vars_num = padded.len().ilog2();
+    //     remap_to_reverse_bits_indexing(&mut padded, vars_num as usize);
+    // 
+    //     RoundPoly::Inputs(interpolate(inputs))
+    // }
 }
 
 fn execute<F: Field>(executor: &ExecutorGateEnum, a: &F, b: &F) -> F {
@@ -655,12 +627,6 @@ pub fn test_gkr() {
         executor: ExecutorGateEnum::Mul(MulGate {})
     };
 
-    println!(
-        "-12719300 {}\n-24282300 {}",
-        Fr::from(-12719300),
-        Fr::from(-24282300),
-    );
-
     let layer_1 = Layer {
         gates: vec![&add_gate_1, &add_gate_2],
     };
@@ -687,6 +653,22 @@ pub fn test_gkr() {
         .collect::<Vec<_>>();
 
     prove(circuit, solution, &random_points);
+}
+
+fn verify<F: Field>(
+    circuit: Circuit<F>,
+) {
+    
+}
+
+struct GKRProofLayer<F: Field> {
+    sumcheck_proof: SumCheckProof<F>,
+    r_star: F,
+}
+
+struct GKRProof<F: Field> {
+    layers: GKRProofLayer<F>,
+    outputs: Vec<F>,
 }
 
 fn prove<F: Field>(
@@ -738,8 +720,7 @@ fn prove<F: Field>(
         println!("mi {:?}", mi);
 
         // let (used_r, used_polys) = sumcheck::prove_2_old(sc_poly.clone(), mi);
-        let sumcheck_proof = sumcheck::prove_2(&sc_poly, mi);
-
+        let sumcheck_proof = sumcheck::prove(&sc_poly);
         
         let mut used_r = sumcheck_proof.steps
             .iter()

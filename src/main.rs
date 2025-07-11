@@ -5,7 +5,6 @@ mod poly_utils;
 mod gkr;
 
 use std::ops::{Div, Mul, Sub};
-use std::process::id;
 use ark_ec::{AdditiveGroup, PrimeGroup, AffineRepr, CurveGroup};
 use ark_ec::pairing::Pairing;
 use ark_std::{Zero, UniformRand};
@@ -41,7 +40,7 @@ fn main() {
     // run_kzg();
     // schnorr::run_schnorr();
     // sumcheck::test_sc();
-    gkr::gkr::test_gkr();
+    // gkr::gkr::test_gkr();
 }
 
 fn setup() -> (Vec<Affine<G1Config>>, Affine<G2Config>) {

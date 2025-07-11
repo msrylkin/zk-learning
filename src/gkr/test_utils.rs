@@ -3,6 +3,7 @@ use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 use ark_test_curves::bls12_381::Fr;
 use crate::gkr::circuit::{Circuit, CircuitBuilder, Layer};
 use crate::gkr::prover::LayerRoundPoly;
+use crate::gkr::random_oracle::FixedRandomOracle;
 use crate::poly_utils::remap_to_reverse_bits_indexing;
 
 #[cfg(test)]
@@ -98,4 +99,10 @@ pub fn get_test_circuit() -> Circuit<Fr> {
         .build();
 
     circuit
+}
+
+pub fn test_fixed_random_oracle<F: Field>() -> FixedRandomOracle<F> {
+    let test_values = vec![3,22,12,93,8181,12398,123].into_iter().map(F::from).collect::<Vec<_>>();
+    
+    FixedRandomOracle::new(test_values)
 }

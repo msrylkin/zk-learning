@@ -13,14 +13,13 @@ struct InputGate<F: Field> {
 }
 
 #[derive(Debug)]
-enum GateType<F: Field> {
+enum GateType {
     AddGate(Gate),
     MulGate(Gate),
-    Input(F),
 }
 
-impl<F: Field> GateType<F> {
-    fn execute(&self, previous_layer: &[F]) -> F {
+impl GateType {
+    fn execute<F: Field>(&self, previous_layer: &[F]) -> F {
         match self {
             GateType::AddGate(Gate { inputs: (i_a, i_b)}) => previous_layer[*i_a] + previous_layer[*i_b],
             GateType::MulGate(Gate { inputs: (i_a, i_b )}) => previous_layer[*i_a] * previous_layer[*i_b],
@@ -54,25 +53,28 @@ impl<F: Field> GateType<F> {
 }
 
 #[derive(Debug)]
-struct Layer<F: Field> {
-    gates: Vec<GateType<F>>,
+struct Layer {
+    gates: Vec<GateType>,
 }
 
-impl<F: Field> Layer<F> {
-    fn add_gate(&mut self, gate: GateType<F>) {
-        self.gates.push(gate);
+#[derive(Debug)]
+pub struct Circuit<F: Field> {
+    inputs: Vec<F>,
+    layers: Vec<Layer>
+}
+
+impl<F: Field> Solution<F>  {
+    pub fn to_evaluations(&self) -> Vec<Vec<F>> {
+        self.evaluations.clone()
+    }
+    
+    pub fn inputs(&self) -> Vec<F> {
+        self.inputs.clone()
     }
 }
 
 #[derive(Debug)]
-struct Circuit<F: Field> {
-    inputs: Vec<F>,
-    inputs_count: usize,
-    layers: Vec<Layer<F>>
-}
-
-#[derive(Debug)]
-struct Solution<F: Field> {
+pub struct Solution<F: Field> {
     evaluations: Vec<Vec<F>>,
     inputs: Vec<F>,
 }
@@ -83,9 +85,8 @@ impl<F: Field> Circuit<F> {
         for layer in &self.layers {
             let previous_layer_values = evaluations.last().unwrap_or(&self.inputs);
             let mut current_layer_values = vec![];
-            println!("{:?}", layer);
             
-            for (i, gate) in layer.gates.iter().enumerate() {
+            for gate in &layer.gates {
                 let calculated_result = gate.execute(&previous_layer_values);
                 current_layer_values.push(calculated_result);
             }
@@ -99,7 +100,7 @@ impl<F: Field> Circuit<F> {
         }
     }
     
-    fn eq<P: Fn(&GateType<F>) -> bool>(
+    fn eq<P: Fn(&GateType) -> bool>(
         &self,
         layer_i: usize,
         check_gate: P,
@@ -133,23 +134,17 @@ impl<F: Field> Circuit<F> {
         DenseMultilinearExtension::from_evaluations_vec(total_vars_num, evals)
     }
     
-    fn add_i(&self, layer_i: usize) -> DenseMultilinearExtension<F> {
+    pub fn add_i(&self, layer_i: usize) -> DenseMultilinearExtension<F> {
         self.eq(layer_i, |gate| matches!(gate, GateType::AddGate(_)))
     }
 
-    fn mul_i(&self, layer_i: usize) -> DenseMultilinearExtension<F> {
+    pub fn mul_i(&self, layer_i: usize) -> DenseMultilinearExtension<F> {
         self.eq(layer_i, |gate| matches!(gate, GateType::MulGate(_)))
     }
 }
 
-struct Input<F> {
-    value: F
-}
-
-
 #[cfg(test)]
 mod tests {
-    use ark_ff::{One, Zero};
     use ark_test_curves::bls12_381::Fr;
     use super::*;
     
@@ -157,7 +152,6 @@ mod tests {
     fn circuit_test() {
         let circuit = Circuit {
             inputs: vec![10, 200, 20, 300].into_iter().map(Fr::from).collect(),
-            inputs_count: 2,
             layers: vec![
                 Layer {
                     gates: vec![

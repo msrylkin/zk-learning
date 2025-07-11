@@ -1,9 +1,11 @@
 use ark_ff::Field;
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 use ark_test_curves::bls12_381::Fr;
+use crate::gkr::circuit::{Circuit, CircuitBuilder, Layer};
 use crate::gkr::prover::LayerRoundPoly;
 use crate::poly_utils::remap_to_reverse_bits_indexing;
 
+#[cfg(test)]
 pub fn get_test_round_poly_2_vars<F: Field>() -> LayerRoundPoly<F> {
     let add_i = DenseMultilinearExtension::from_evaluations_vec(
         2,
@@ -27,6 +29,7 @@ pub fn get_test_round_poly_2_vars<F: Field>() -> LayerRoundPoly<F> {
     LayerRoundPoly::new(add_i, mul_i, Wi_1.clone(), Wi_1.clone())
 }
 
+#[cfg(test)]
 pub fn get_test_round_poly_4_vars<F: Field>() -> LayerRoundPoly<F> {
     let add_i = DenseMultilinearExtension::from_evaluations_vec(
         5,
@@ -53,4 +56,46 @@ pub fn get_test_round_poly_4_vars<F: Field>() -> LayerRoundPoly<F> {
         Wi_1.clone(),
         Wi_1.clone(),
     )
+}
+
+#[cfg(test)]
+pub fn get_test_circuit() -> Circuit<Fr> {
+    // let circuit = Circuit {
+    //     inputs: vec![10, 200, 20, 300].into_iter().map(Fr::from).collect(),
+    //     layers: vec![
+    //         Layer {
+    //             gates: vec![
+    //                 crate::gkr::circuit::GateType::AddGate(crate::gkr::circuit::Gate {
+    //                     inputs: (0, 1),
+    //                 }),
+    //                 crate::gkr::circuit::GateType::AddGate(crate::gkr::circuit::Gate {
+    //                     inputs: (2, 3),
+    //                 }),
+    //             ]
+    //         },
+    //         crate::gkr::circuit::Layer {
+    //             gates: vec![
+    //                 crate::gkr::circuit::GateType::MulGate(crate::gkr::circuit::Gate {
+    //                     inputs: (0, 1),
+    //                 }),
+    //             ]
+    //         },
+    //     ],
+    // };
+    
+    let circuit = CircuitBuilder::new(
+        vec![10, 200, 20, 300].into_iter().map(Fr::from).collect()
+    )
+        .add_layer(
+            Layer::new()
+                .add_addition_gate((0, 1))
+                .add_addition_gate((2, 3))
+        )
+        .add_layer(
+            Layer::new()
+                .add_multiplication_gate((0, 1))
+        )
+        .build();
+
+    circuit
 }

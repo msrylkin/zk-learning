@@ -53,14 +53,71 @@ impl GateType {
 }
 
 #[derive(Debug)]
-struct Layer {
+pub struct Layer {
     gates: Vec<GateType>,
+}
+
+impl Layer {
+    pub fn new() -> Self {
+        Self { gates: vec![] }
+    }
+
+    pub fn add_addition_gate(self, inputs: (usize, usize)) -> Self {
+        let mut gates = self.gates;
+        gates.push(GateType::AddGate(Gate { inputs }));
+
+        Self {
+            gates,
+            ..self
+        }
+    }
+
+    pub fn add_multiplication_gate(self, inputs: (usize, usize)) -> Self {
+        let mut gates = self.gates;
+        gates.push(GateType::MulGate(Gate { inputs }));
+        
+        Self {
+            gates,
+            ..self
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct Circuit<F: Field> {
     inputs: Vec<F>,
     layers: Vec<Layer>
+}
+
+
+pub struct CircuitBuilder<F: Field> {
+    circuit: Circuit<F>,
+}
+
+impl<F: Field> CircuitBuilder<F> {
+    pub fn new(inputs: Vec<F>) -> Self {
+        assert_ne!(inputs.len(), 0);
+
+        Self {
+            circuit: Circuit {
+                inputs,
+                layers: vec![],
+            }
+        }
+    }
+
+    pub fn add_layer(self, layer: Layer) -> Self {
+        let mut circuit = self.circuit;
+        circuit.layers.push(layer);
+        
+        Self {
+            circuit
+        }
+    }
+    
+    pub fn build(self) -> Circuit<F> {
+        self.circuit
+    }
 }
 
 impl<F: Field> Solution<F>  {
@@ -80,7 +137,7 @@ pub struct Solution<F: Field> {
 }
 
 impl<F: Field> Circuit<F> {
-    fn solve(&self) -> Solution<F> {
+    pub fn solve(&self) -> Solution<F> {
         let mut evaluations = vec![];
         for layer in &self.layers {
             let previous_layer_values = evaluations.last().unwrap_or(&self.inputs);
@@ -109,10 +166,7 @@ impl<F: Field> Circuit<F> {
         let gates_n = layer.gates.len();
         let vars_num = f64::from(gates_n as u32).log2().ceil() as usize;
 
-        let bottom_gates_n = match layer_i {
-            0 => self.inputs.len(),
-            _ => self.layers[layer_i - 1].gates.len(),
-        };
+        let bottom_gates_n = self.get_bottom_layer_gates_count(layer_i);
         let bottom_vars_num = f64::from(bottom_gates_n as u32).log2().ceil() as usize;
 
         let total_vars_num = vars_num + bottom_vars_num * 2;
@@ -133,6 +187,13 @@ impl<F: Field> Circuit<F> {
 
         DenseMultilinearExtension::from_evaluations_vec(total_vars_num, evals)
     }
+
+    fn get_bottom_layer_gates_count(&self, layer_i: usize) -> usize {
+        match layer_i {
+            0 => self.inputs.len(),
+            _ => self.layers[layer_i - 1].gates.len(),
+        }
+    }
     
     pub fn add_i(&self, layer_i: usize) -> DenseMultilinearExtension<F> {
         self.eq(layer_i, |gate| matches!(gate, GateType::AddGate(_)))
@@ -146,32 +207,11 @@ impl<F: Field> Circuit<F> {
 #[cfg(test)]
 mod tests {
     use ark_test_curves::bls12_381::Fr;
-    use super::*;
+    use crate::gkr::test_utils::get_test_circuit;
     
     #[test]
     fn circuit_test() {
-        let circuit = Circuit {
-            inputs: vec![10, 200, 20, 300].into_iter().map(Fr::from).collect(),
-            layers: vec![
-                Layer {
-                    gates: vec![
-                        GateType::AddGate(Gate {
-                            inputs: (0, 1),
-                        }),
-                        GateType::AddGate(Gate {
-                            inputs: (2, 3),
-                        }),
-                    ]
-                },
-                Layer {
-                    gates: vec![
-                        GateType::MulGate(Gate {
-                            inputs: (0, 1),
-                        }),
-                    ]
-                },
-            ],
-        };
+        let circuit = get_test_circuit();
         
         let solution = circuit.solve();
         assert_eq!(solution.inputs, vec![10, 200, 20, 300].into_iter().map(Fr::from).collect::<Vec<_>>());

@@ -145,7 +145,7 @@ impl<F: Field> SumCheckPoly<F> for LayerRoundPoly<F> {
     }
 }
 
-fn prove<F: Field>(
+pub fn prove<F: Field>(
     circuit: &Circuit<F>,
     solution: &Solution<F>,
     random_points: &[F],

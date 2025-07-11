@@ -16,3 +16,25 @@ pub fn get_reversed_vars_poly<F: Field>(poly: &DenseMultilinearExtension<F>) -> 
 
     res_poly
 }
+
+pub fn get_bits(k: usize, bit_len: usize) -> Vec<usize> {
+    let mut result = vec![];
+    for i in (0..bit_len).rev() {
+        let kk = k >> i;
+        let res = kk & 1;
+        result.push(res);
+    }
+
+    result
+}
+
+pub fn reverse_bits(mut n: usize, k: usize) -> usize {
+    let mut res = 0;
+    for _ in 0..k {
+        res <<= 1;
+        res |= n & 1;
+        n >>= 1;
+    }
+
+    res
+}

@@ -1,8 +1,8 @@
 mod kzg;
 mod schnorr;
-mod gkr;
 mod sumcheck;
 mod poly_utils;
+mod gkr;
 
 use std::ops::{Div, Mul, Sub};
 use std::process::id;
@@ -41,7 +41,7 @@ fn main() {
     // run_kzg();
     // schnorr::run_schnorr();
     // sumcheck::test_sc();
-    gkr::test_gkr();
+    gkr::gkr::test_gkr();
 }
 
 fn setup() -> (Vec<Affine<G1Config>>, Affine<G2Config>) {

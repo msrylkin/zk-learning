@@ -4,6 +4,7 @@ mod prover;
 mod verifier;
 mod common;
 mod test_utils;
+mod random_oracle;
 
 #[cfg(test)]
 mod tests {

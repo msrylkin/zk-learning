@@ -1,8 +1,10 @@
 use std::cell::RefCell;
 use ark_ff::Field;
 
-pub trait RandomOracle<F> {
-    fn get_randomness(&self, n: usize) -> Vec<F>;
+pub trait RandomOracle {
+    type Item: Field;
+
+    fn get_randomness(&self, n: usize) -> Vec<Self::Item>;
 }
 
 pub struct FixedRandomOracle<F: Field> {
@@ -10,7 +12,7 @@ pub struct FixedRandomOracle<F: Field> {
     values: Vec<F>
 }
 
-impl <F: Field> FixedRandomOracle<F> {
+impl<F: Field> FixedRandomOracle<F> {
     pub fn new(values: Vec<F>) -> Self {
         assert_ne!(values.len(), 0);
 
@@ -21,7 +23,9 @@ impl <F: Field> FixedRandomOracle<F> {
     }
 }
 
-impl <F: Field> RandomOracle<F> for FixedRandomOracle<F> {
+impl<F: Field> RandomOracle for FixedRandomOracle<F> {
+    type Item = F;
+
     fn get_randomness(&self, n: usize) -> Vec<F> {
         let mut remaining = n;
         let mut randomness = vec![];
@@ -38,5 +42,17 @@ impl <F: Field> RandomOracle<F> for FixedRandomOracle<F> {
         }
         
         randomness
+    }
+}
+
+struct ProxyRandomOracle<'a, P> {
+    parent: &'a P,
+}
+
+impl<F: Field, P: RandomOracle<Item = F>> RandomOracle for ProxyRandomOracle<'_, P> {
+    type Item = F;
+
+    fn get_randomness(&self, n: usize) -> Vec<F> {
+        self.parent.get_randomness(n)
     }
 }

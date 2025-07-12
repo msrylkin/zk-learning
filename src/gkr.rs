@@ -5,6 +5,7 @@ mod verifier;
 mod common;
 mod test_utils;
 mod random_oracle;
+mod protocol;
 
 #[cfg(test)]
 mod tests {
@@ -14,7 +15,9 @@ mod tests {
     use ark_poly::univariate::DensePolynomial;
     use crate::gkr::common::GKRProofLayer;
     use crate::gkr::prover::{prove, LayerRoundPoly};
-    use crate::gkr::test_utils::get_test_circuit;
+    use crate::gkr::random_oracle::FixedRandomOracle;
+    use crate::gkr::test_utils::{get_test_circuit, test_fixed_random_oracle};
+    use crate::gkr::verifier::verify;
     use crate::poly_utils::{get_evaluations_by_mask, remap_to_reverse_bits_indexing, to_two_or_one_degree};
     use crate::sumcheck::{prove as sc_prove, SumCheckPoly, SumCheckProof};
     use super::*;
@@ -27,8 +30,9 @@ mod tests {
             .into_iter()
             .map(Fr::from)
             .collect::<Vec<_>>();
+        let random_oracle = test_fixed_random_oracle();
 
-        let gkr_proof = prove(&circuit, &solution, &random_points);
+        let gkr_proof = prove(&circuit, &solution, &random_oracle);
         
         println!("{:?}", gkr_proof);
         
@@ -39,6 +43,8 @@ mod tests {
         assert_eq!(gkr_proof.W0.evaluations, vec![Fr::from(67200)]);
         
         assert_eq!(gkr_proof.layers.len(), 2);
+        
+        verify(&circuit, &gkr_proof);
         // layer 1
         // assert_eq!(gkr_proof.layers[0].r_star, Fr::from(22));
         // assert_eq!(gkr_proof.layers[0], GKRProofLayer {

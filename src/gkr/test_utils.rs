@@ -101,6 +101,7 @@ pub fn get_test_circuit() -> Circuit<Fr> {
     circuit
 }
 
+#[cfg(test)]
 pub fn test_fixed_random_oracle<F: Field>() -> FixedRandomOracle<F> {
     let test_values = vec![3,22,12,93,8181,12398,123].into_iter().map(F::from).collect::<Vec<_>>();
     

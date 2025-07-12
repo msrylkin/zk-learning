@@ -3,6 +3,7 @@ use ark_poly::{DenseMultilinearExtension, DenseUVPolynomial, MultilinearExtensio
 use ark_poly::univariate::DensePolynomial;
 use crate::gkr::circuit::{Circuit, Solution};
 use crate::gkr::common::{GKRProof, GKRProofLayer};
+use crate::gkr::random_oracle::RandomOracle;
 use crate::poly_utils::{get_bits, interpolate, line, restrict_poly, reverse_bits, to_two_or_one_degree};
 use crate::sumcheck;
 use crate::sumcheck::SumCheckPoly;
@@ -145,10 +146,11 @@ impl<F: Field> SumCheckPoly<F> for LayerRoundPoly<F> {
     }
 }
 
-pub fn prove<F: Field>(
+pub fn prove<F: Field, O: RandomOracle<Item = F>>(
     circuit: &Circuit<F>,
     solution: &Solution<F>,
-    random_points: &[F],
+    // random_points: &[F],
+    random_oracle: &O,
 ) -> GKRProof<F> {
     let solution_evaluations = solution.to_evaluations();
     let solution_inputs = solution.inputs();
@@ -156,7 +158,8 @@ pub fn prove<F: Field>(
 
     let W0 = interpolate(&outputs);
     let mut spent_points = MultilinearExtension::num_vars(&W0);
-    let r0 = random_points[..spent_points].to_vec();
+    // let r0 = random_points[..spent_points].to_vec();
+    let r0 = random_oracle.get_randomness(spent_points);
     let mut ri = r0.clone();
 
     let mut gkr_proof_layers = vec![];
@@ -190,7 +193,8 @@ pub fn prove<F: Field>(
         let l = line(b, c);
 
         let q = restrict_poly(&l, Wi_1);
-        let r_star = random_points[spent_points];
+        // let r_star = random_points[spent_points];
+        let r_star = random_oracle.get_randomness(1)[0];
         spent_points += 1;
 
         ri = l.iter().map(|li| li.evaluate(&r_star)).collect();

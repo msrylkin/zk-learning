@@ -31,8 +31,8 @@ impl<F: Field> OracleEvaluation<F> for GKRFinalOracle<F> {
     }
 }
 
-fn verify<F: Field>(
-    circuit: Circuit<F>,
+pub fn verify<F: Field>(
+    circuit: &Circuit<F>,
     proof: &GKRProof<F>,
 ) {
     let mut mi = Polynomial::evaluate(&proof.W0, &proof.r0);

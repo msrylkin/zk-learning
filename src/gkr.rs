@@ -4,24 +4,15 @@ mod prover;
 mod verifier;
 mod common;
 mod test_utils;
-mod random_oracle;
 mod protocol;
 
 #[cfg(test)]
 mod tests {
     use ark_test_curves::bls12_381::Fr;
-    use ark_ff::{Field, Zero};
-    use ark_poly::{DenseMultilinearExtension, DenseUVPolynomial, MultilinearExtension};
-    use ark_poly::univariate::DensePolynomial;
-    use crate::gkr::common::GKRProofLayer;
-    use crate::gkr::prover::{prove, LayerRoundPoly};
-    use crate::gkr::random_oracle::FixedRandomOracle;
+    use crate::gkr::prover::prove;
     use crate::gkr::test_utils::{get_test_circuit, test_fixed_random_oracle};
     use crate::gkr::verifier::verify;
-    use crate::poly_utils::{get_evaluations_by_mask, remap_to_reverse_bits_indexing, to_two_or_one_degree};
-    use crate::sumcheck::{prove as sc_prove, SumCheckPoly, SumCheckProof};
-    use super::*;
-
+    use crate::sumcheck::prove as sc_prove;
     #[test]
     fn test_prove() {
         let circuit = get_test_circuit();

@@ -3,7 +3,7 @@ use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 use ark_test_curves::bls12_381::Fr;
 use crate::gkr::circuit::{Circuit, CircuitBuilder, Layer};
 use crate::gkr::prover::LayerRoundPoly;
-use crate::gkr::random_oracle::FixedRandomOracle;
+use crate::random_oracle::FixedRandomOracle;
 use crate::poly_utils::remap_to_reverse_bits_indexing;
 
 #[cfg(test)]

@@ -5,7 +5,7 @@ use crate::gkr::circuit::Circuit;
 use crate::gkr::common::{GKRProof, GKRProofLayer};
 use crate::poly_utils::{interpolate, line};
 use crate::sumcheck;
-use crate::sumcheck::OracleEvaluation;
+use crate::sumcheck::{OracleEvaluation, SumCheckProtocol};
 
 #[derive(Debug, Clone)]
 struct GKRFinalOracle<F: Field> {
@@ -34,6 +34,7 @@ impl<F: Field> OracleEvaluation<F> for GKRFinalOracle<F> {
 pub fn verify<F: Field>(
     circuit: &Circuit<F>,
     proof: &GKRProof<F>,
+    sum_check_protocol: &SumCheckProtocol,
 ) {
     let mut mi = Polynomial::evaluate(&proof.W0, &proof.r0);
     let mut ri = proof.r0.clone();
@@ -49,7 +50,8 @@ pub fn verify<F: Field>(
 
         let final_oracle = GKRFinalOracle::new(add_fixed, mul_fixed, q.clone());
 
-        sumcheck::verify(&final_oracle, &sumcheck_proof, mi);
+        // sumcheck::verify(&final_oracle, &sumcheck_proof, mi);
+        sum_check_protocol.verify(&final_oracle, &sumcheck_proof, mi);
 
         ri = l.iter().map(|li| li.evaluate(r_star)).collect::<Vec<_>>();
         mi = q.evaluate(r_star);

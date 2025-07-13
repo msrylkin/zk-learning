@@ -3,13 +3,14 @@ mod schnorr;
 mod sumcheck;
 mod poly_utils;
 mod gkr;
+mod random_oracle;
 
 use std::ops::{Div, Mul, Sub};
-use ark_ec::{AdditiveGroup, PrimeGroup, AffineRepr, CurveGroup};
+use ark_ec::{AdditiveGroup, AffineRepr, CurveGroup, PrimeGroup};
 use ark_ec::pairing::Pairing;
-use ark_std::{Zero, UniformRand};
-use ark_test_curves::bls12_381::{Bls12_381, G1Affine as G1, G2Affine as G2, Fr, Fq};
-use ark_ff::{FftField, Fp256, One};
+use ark_std::{UniformRand, Zero};
+use ark_test_curves::bls12_381::{Bls12_381, Fr, G1Affine as G1, G2Affine as G2};
+use ark_ff::{FftField, One};
 use ark_poly::univariate::{DenseOrSparsePolynomial, DensePolynomial};
 use ark_ec::short_weierstrass::{Affine, SWCurveConfig};
 use ark_ff::Field;

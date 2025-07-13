@@ -45,8 +45,16 @@ impl<F: Field> RandomOracle for FixedRandomOracle<F> {
     }
 }
 
-struct ProxyRandomOracle<'a, P> {
+pub struct ProxyRandomOracle<'a, P> {
     parent: &'a P,
+}
+
+impl<'a, F: Field, P: RandomOracle<Item = F>> ProxyRandomOracle<'a, P> {
+    pub fn new(parent_oracle: &'a P) -> Self {
+        Self {
+            parent: parent_oracle,
+        }
+    }
 }
 
 impl<F: Field, P: RandomOracle<Item = F>> RandomOracle for ProxyRandomOracle<'_, P> {

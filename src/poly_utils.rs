@@ -3,7 +3,7 @@ use std::ops::Add;
 use ark_ff::Field;
 use ark_poly::{DenseMultilinearExtension, DenseUVPolynomial, MultilinearExtension, Polynomial};
 use ark_poly::univariate::DensePolynomial;
-use crate::sumcheck::{interpolate_univariate_on_evals, SumCheckPoly};
+use crate::sumcheck::SumCheckPoly;
 
 pub fn get_reversed_vars_poly<F: Field>(poly: &DenseMultilinearExtension<F>) -> DenseMultilinearExtension<F> {
     let n = MultilinearExtension::num_vars(poly);
@@ -137,6 +137,16 @@ pub fn interpolate_or_const<F: Field>(evals: &[F]) -> DensePolynomial<F> {
         2 => interpolate_univariate_on_evals(evals.try_into().unwrap()),
         _ => panic!("wrong evaluations len"),
     }
+}
+
+// f(x) = (1 - x) * a + x * b ==> a - x * a + x * b ==> a + x * (b - a)
+pub fn interpolate_univariate_on_evals<F: Field>(
+    evals: &[F; 2]
+) -> DensePolynomial<F> {
+    let a = evals[0];
+    let b = evals[1];
+
+    DensePolynomial::from_coefficients_vec(vec![a, b - a])
 }
 
 pub fn get_evaluations_by_mask<F: Field>(

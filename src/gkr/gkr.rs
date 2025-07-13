@@ -6,7 +6,7 @@ use ark_poly::{DenseMultilinearExtension, DenseUVPolynomial, MultilinearExtensio
 use ark_poly::univariate::DensePolynomial;
 use ark_test_curves::bls12_381::Fr;
 use crate::sumcheck;
-use crate::sumcheck::{interpolate_univariate_on_evals, OracleEvaluation, SumCheckPoly, SumCheckProof};
+// use crate::sumcheck::{interpolate_univariate_on_evals, OracleEvaluation, SumCheckPoly, SumCheckProof};
 
 
 // pub fn test_gkr() {

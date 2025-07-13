@@ -3,10 +3,10 @@ use ark_poly::{DenseMultilinearExtension, DenseUVPolynomial, MultilinearExtensio
 use ark_poly::univariate::DensePolynomial;
 use crate::gkr::circuit::{Circuit, Solution};
 use crate::gkr::common::{GKRProof, GKRProofLayer};
-use crate::gkr::random_oracle::RandomOracle;
+use crate::random_oracle::RandomOracle;
 use crate::poly_utils::{get_bits, interpolate, line, restrict_poly, reverse_bits, to_two_or_one_degree};
 use crate::sumcheck;
-use crate::sumcheck::SumCheckPoly;
+use crate::sumcheck::{SumCheckPoly, SumCheckProtocol};
 
 #[derive(Debug, Clone)]
 pub struct LayerRoundPoly<F: Field> {
@@ -185,7 +185,8 @@ pub fn prove<F: Field, O: RandomOracle<Item = F>>(
             Wi_1_b: Wi_1.clone(),
         };
 
-        let sumcheck_proof = sumcheck::prove(&sc_poly);
+        // let sumcheck_proof = sumcheck::prove(&sc_poly);
+        let sumcheck_proof = SumCheckProtocol::prove(&sc_poly);
 
         let used_r = sumcheck_proof.get_used_randomness();
 

@@ -118,9 +118,6 @@ pub fn line<F: Field>(b: &[F], c: &[F]) -> Vec<DensePolynomial<F>> {
     for (b, c) in b.iter().zip(c.iter()) {
         polys.push(DensePolynomial::from_coefficients_slice(&[*b, *c - *b]));
     }
-    
-    println!("b {:?} c {:?}", b, c);
-    // println!("polys {:?}", polys);
 
     polys
 }

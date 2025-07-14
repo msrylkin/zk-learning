@@ -41,8 +41,6 @@ impl<F: Field> RandomOracle for FixedRandomOracle<F> {
             }
         }
         
-        println!("randomness {:?}", randomness);
-        
         randomness
     }
 }

@@ -1,30 +1,16 @@
+use std::ops::Deref;
 use ark_ff::Field;
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension, Polynomial};
 use ark_poly::univariate::DensePolynomial;
-use ark_test_curves::bls12_381::Fr;
 use crate::poly_utils::interpolate_univariate_on_evals;
-// use crate::sumcheck::{interpolate_univariate_on_evals, sum_over_last_variable};
+use crate::sumcheck::OracleEvaluation;
 use crate::sumcheck::sumcheck_poly::SumCheckPoly;
-
-fn get_partial_sum_poly(
-    poly: &DenseMultilinearExtension<Fr>,
-) -> DensePolynomial<Fr> {
-    let sum_vars = SumCheckPoly::num_vars(poly) - 1;
-    let mut current_poly = poly.clone();
-
-    for i in 0..sum_vars {
-        let summed_poly = sum_over_last_variable(&current_poly);
-        current_poly = summed_poly;
-    }
-
-    interpolate_univariate_on_evals(&current_poly.evaluations.try_into().unwrap())
-}
 
 // 000 |
 // 001 --> 00[1 + 0]
 // 010 |
 // 011 --> 01[1 + 0]
-fn sum_over_last_variable<F: Field>(poly: &DenseMultilinearExtension<F>) -> DenseMultilinearExtension<F> {
+fn sum_over_last_variable<F: Field>(poly: &DenseMultilinSumcheckPoly<F>) -> DenseMultilinSumcheckPoly<F> {
     let sums = poly
         .evaluations
         .iter()
@@ -38,55 +24,70 @@ fn sum_over_last_variable<F: Field>(poly: &DenseMultilinearExtension<F>) -> Dens
             sums
         });
 
-    let res = DenseMultilinearExtension::from_evaluations_vec(poly.num_vars - 1, sums);
+    let res = DenseMultilinSumcheckPoly::from_evaluations_vec(poly.num_vars - 1, sums);
 
     res
 }
 
-impl<F: Field> SumCheckPoly<F> for DenseMultilinearExtension<F> {
+#[derive(Clone)]
+pub struct DenseMultilinSumcheckPoly<F: Field>(DenseMultilinearExtension<F>);
+
+impl<F: Field> DenseMultilinSumcheckPoly<F> {
+    pub fn new(poly: DenseMultilinearExtension<F>) -> Self {
+        Self(poly)
+    }
+    pub fn from_evaluations_vec(num_vars: usize, evals: Vec<F>) -> Self {
+        Self(DenseMultilinearExtension::from_evaluations_vec(num_vars, evals))
+    }
+}
+
+impl<F: Field> Deref for DenseMultilinSumcheckPoly<F> {
+    type Target = DenseMultilinearExtension<F>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<F: Field> SumCheckPoly<F> for DenseMultilinSumcheckPoly<F> {
     fn get_evaluations(&self) -> Vec<F> {
-        self.to_evaluations()
+        self.0.to_evaluations()
     }
 
     fn num_vars(&self) -> usize {
-        self.num_vars
+        self.0.num_vars()
     }
 
     fn get_partial_sum_poly(&self) -> DensePolynomial<F> {
-        let sum_vars = SumCheckPoly::num_vars(self) - 1;
+        let sum_vars = self.num_vars() - 1;
         let mut current_poly = self.clone();
 
-        for i in 0..sum_vars {
+        for _ in 0..sum_vars {
             let summed_poly = sum_over_last_variable(&current_poly);
             current_poly = summed_poly;
         }
 
-        interpolate_univariate_on_evals(&current_poly.evaluations.try_into().unwrap())
+        interpolate_univariate_on_evals(&current_poly.get_evaluations().try_into().unwrap())
     }
 
-    // fn get_partial_sum_poly(&self) -> DensePolynomial<F> {
-    //     let mut current_sc_poly = self.clone();
-    //     let num_vars = MultilinearExtension::num_vars(&current_sc_poly);
-    // 
-    //     let evals = self.get_evaluations();
-    //     println!("evals {:?}", evals);
-    // 
-    //     let (zeroes, ones) = evals.iter().enumerate().fold((F::zero(), F::zero()), |(zeroes, ones), (i, eval)| {
-    //         if i % 2 == 0 {
-    //             (zeroes + eval, ones)
-    //         } else {
-    //             (zeroes, ones + eval)
-    //         }
-    //     });
-    // 
-    //     interpolate_univariate_on_evals(&[zeroes, ones])
-    // }
-
     fn fix_variables(&self, partial_point: &[F]) -> Self {
-        MultilinearExtension::fix_variables(self, partial_point)
+        DenseMultilinSumcheckPoly(self.0.fix_variables(partial_point))
     }
 
     fn evaluate(&self, point: &[F]) -> F {
-        Polynomial::evaluate(self, &point.to_vec())
+        self.0.evaluate(&point.to_vec())
+    }
+}
+
+pub struct DenseMultilinFinalEvaluationOracle<F: Field>(DenseMultilinSumcheckPoly<F>);
+
+impl<F: Field> DenseMultilinFinalEvaluationOracle<F> {
+    pub fn new(poly: DenseMultilinSumcheckPoly<F>) -> Self {
+        Self(poly)
+    }
+}
+
+impl<F: Field> OracleEvaluation<F> for DenseMultilinFinalEvaluationOracle<F> {
+    fn final_eval(&self, r: &[F]) -> F {
+        self.0.evaluate(&r.to_vec())
     }
 }

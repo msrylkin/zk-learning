@@ -41,6 +41,8 @@ impl<F: Field> RandomOracle for FixedRandomOracle<F> {
             }
         }
         
+        println!("randomness {:?}", randomness);
+        
         randomness
     }
 }
@@ -62,5 +64,26 @@ impl<F: Field, P: RandomOracle<Item = F>> RandomOracle for ProxyRandomOracle<'_,
 
     fn get_randomness(&self, n: usize) -> Vec<F> {
         self.parent.get_randomness(n)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use ark_test_curves::bls12_381::Fr;
+    use crate::poly_utils::to_f;
+    use crate::random_oracle::{FixedRandomOracle, RandomOracle};
+
+    #[test]
+    fn test_fixed_random_oracle() {
+        let fixed_random_oracle = FixedRandomOracle::new(to_f::<Fr>(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 100]));
+        
+        let n1 = fixed_random_oracle.get_randomness(1);
+        assert_eq!(n1, vec![Fr::from(1)]);
+        
+        let n5 = fixed_random_oracle.get_randomness(5);
+        assert_eq!(n5, to_f(vec![2,3,4,5,6]));
+        
+        let n12 = fixed_random_oracle.get_randomness(12);
+        assert_eq!(n12, to_f(vec![7, 8, 9, 100, 1, 2, 3, 4, 5, 6, 7 ,8]));
     }
 }

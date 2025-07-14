@@ -1,3 +1,4 @@
+use std::ops::Div;
 use ark_ff::Field;
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension, Polynomial};
 use ark_poly::univariate::DensePolynomial;
@@ -48,10 +49,12 @@ pub fn verify<F: Field, R: RandomOracle<Item = F>>(
         let used_r = sumcheck_proof.get_used_randomness();
         let (b, c) = used_r.split_at(used_r.len() / 2);
         let l = line(b, c);
+        
+        let q_max_degree = circuit.get_bottom_layer_gates_count(i);
+        assert!(q.degree() <= q_max_degree);
 
         let final_oracle = GKRFinalOracle::new(add_fixed, mul_fixed, q.clone());
 
-        // sumcheck::verify(&final_oracle, &sumcheck_proof, mi);
         sum_check_protocol.verify(&final_oracle, &sumcheck_proof, mi);
 
         ri = l.iter().map(|li| li.evaluate(r_star)).collect::<Vec<_>>();

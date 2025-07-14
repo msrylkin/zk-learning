@@ -55,7 +55,7 @@ pub fn restrict_poly<F: Field>(
 
     let mut res = DensePolynomial::from_coefficients_slice(&[F::zero()]);
 
-    let mut evals_to_map = w.get_evaluations();
+    let mut evals_to_map = w.to_evaluations();
     remap_to_reverse_bits_indexing(&mut evals_to_map, num_vars);
 
     for (i, term) in evals_to_map.into_iter().enumerate() {
@@ -119,6 +119,9 @@ pub fn line<F: Field>(b: &[F], c: &[F]) -> Vec<DensePolynomial<F>> {
     for (b, c) in b.iter().zip(c.iter()) {
         polys.push(DensePolynomial::from_coefficients_slice(&[*b, *c - *b]));
     }
+    
+    println!("b {:?} c {:?}", b, c);
+    // println!("polys {:?}", polys);
 
     polys
 }
@@ -177,6 +180,10 @@ pub fn get_evaluations_by_mask<F: Field>(
     new_evals.push(mle_evals[index_2]);
 
     new_evals
+}
+
+pub fn to_f<F: Field>(vals: Vec<i64>) -> Vec<F> {
+    vals.into_iter().map(|e| F::from(e)).collect()
 }
 
 #[cfg(test)]
@@ -240,7 +247,6 @@ mod tests {
         for (mask, (coef_1, coef_2)) in cases {
             let res = to_two_or_one_degree(&poly, mask, nvars - 1);
 
-            println!("res {:?}", res);
             assert_eq!(res.coeffs.len(), 2);
             assert_eq!(res.coeffs, [Fr::from(coef_1), Fr::from(coef_2)]);
         }

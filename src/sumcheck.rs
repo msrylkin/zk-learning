@@ -15,6 +15,8 @@ use ark_poly::{DenseMultilinearExtension, DenseUVPolynomial, MultilinearExtensio
 use ark_poly::univariate::DensePolynomial;
 use ark_std::Zero;
 use ark_test_curves::bls12_381::Fr;
+use crate::random_oracle::FixedRandomOracle;
+use crate::sumcheck::multilin_sumcheck_poly::{DenseMultilinFinalEvaluationOracle, DenseMultilinSumcheckPoly};
 
 pub fn test_sc() {
     let mut poly = DenseMultilinearExtension::from_evaluations_vec(
@@ -23,12 +25,22 @@ pub fn test_sc() {
     );
     
     let sum = poly.iter().sum::<Fr>();
+    let dense_sc_poly = DenseMultilinSumcheckPoly::new(poly);
+    let random_oracle = FixedRandomOracle::new(vec![10, 20, 30, 40, 50].into_iter().map(Fr::from).collect());
+    let sc_protocol = SumCheckProtocol::new(
+        1,
+        &random_oracle
+    );
 
-    // let new_res = prove(&poly);
-    // 
-    // println!("\nnew res {:?}", new_res);
-    // 
-    // println!("poly proved");
+    let sc_proof = sc_protocol.prove(&dense_sc_poly);
+    
+    println!("\nnew res {:?}", sc_proof);
+    
+    let final_evaluation_oracle = DenseMultilinFinalEvaluationOracle::new(dense_sc_poly);
+    
+    sc_protocol.verify(&final_evaluation_oracle, &sc_proof, sum);
+    
+    println!("poly proved");
 }
 
 // impl<F: Field> SumCheckPoly<F> for DenseMultilinearExtension<F> {

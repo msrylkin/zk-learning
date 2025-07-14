@@ -1,4 +1,3 @@
 ```
-PlonK zkSNARK with KZG PCS.
-For education purposes
+Educational stuff on ZKP
 ```

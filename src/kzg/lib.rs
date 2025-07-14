@@ -1,7 +1,7 @@
 use std::ops::{Div, Mul, Sub};
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ec::pairing::Pairing;
-use ark_std::{UniformRand, Zero};
+use ark_std::{UniformRand};
 use ark_test_curves::bls12_381::{Bls12_381, Fr, G1Affine as G1, G2Affine as G2};
 use ark_ff::{One};
 use ark_poly::univariate::{DensePolynomial};

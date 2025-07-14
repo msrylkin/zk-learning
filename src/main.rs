@@ -1,3 +1,6 @@
+#![allow(non_snake_case)]
+#![allow(dead_code)]
+
 mod kzg;
 mod schnorr;
 mod sumcheck;

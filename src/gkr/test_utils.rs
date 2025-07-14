@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 use ark_ff::Field;
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 use ark_test_curves::bls12_381::Fr;
@@ -30,7 +32,7 @@ pub fn get_test_round_poly_4_vars<F: Field>() -> LayerRoundPoly<F> {
     );
     let mul_i = DenseMultilinearExtension::from_evaluations_vec(
         5,
-        (0..32).into_iter().map(|e| F::from(0)).collect::<Vec<_>>(),
+        vec![F::from(0); 32],
     );
     let Wi_1 = DenseMultilinearExtension::from_evaluations_vec(
         2,

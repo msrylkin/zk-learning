@@ -23,7 +23,6 @@ impl GateType {
         match self {
             GateType::AddGate(Gate { inputs: (i_a, i_b)}) => previous_layer[*i_a] + previous_layer[*i_b],
             GateType::MulGate(Gate { inputs: (i_a, i_b )}) => previous_layer[*i_a] * previous_layer[*i_b],
-            _ => panic!(),
         }
     }
     
@@ -31,7 +30,6 @@ impl GateType {
         match self {
             GateType::AddGate(Gate { inputs: (i_a, i_b)}) => (*i_a, *i_b),
             GateType::MulGate(Gate { inputs: (i_a, i_b )}) => (*i_a, *i_b),
-            _ => panic!(),
         }
     }
     

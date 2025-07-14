@@ -1,7 +1,7 @@
 mod circuit;
 mod prover;
 mod verifier;
-mod common;
+mod proof;
 mod test_utils;
 mod protocol;
 
@@ -11,7 +11,7 @@ mod tests {
     use crate::gkr::protocol::GKRProtocol;
     use crate::gkr::test_utils::{get_test_circuit};
     use crate::poly_utils::to_f;
-    use crate::random_oracle::{FixedRandomOracle, RandomOracle};
+    use crate::random_oracle::{FixedRandomOracle};
     
     fn get_test_random_oracle() -> FixedRandomOracle<Fr> {
         let random_points = to_f(vec![3,4,5,9,11,12,13, 14]);

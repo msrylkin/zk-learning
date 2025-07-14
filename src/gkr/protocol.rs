@@ -1,6 +1,6 @@
 use ark_ff::Field;
 use crate::gkr::circuit::{Circuit, Solution};
-use crate::gkr::common::GKRProof;
+use crate::gkr::proof::GKRProof;
 use crate::gkr::prover::prove;
 use crate::gkr::verifier::verify;
 use crate::random_oracle::{RandomOracle};

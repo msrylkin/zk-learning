@@ -2,7 +2,7 @@ use ark_ff::Field;
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension, Polynomial};
 use ark_poly::univariate::DensePolynomial;
 use crate::gkr::circuit::Circuit;
-use crate::gkr::common::{GKRProof, GKRProofLayer};
+use crate::gkr::proof::{GKRProof, GKRProofLayer};
 use crate::poly_utils::{interpolate, line};
 use crate::random_oracle::RandomOracle;
 use crate::sumcheck::{OracleEvaluation, SumCheckProtocol};

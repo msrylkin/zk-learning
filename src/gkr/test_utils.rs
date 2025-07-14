@@ -3,8 +3,6 @@ use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 use ark_test_curves::bls12_381::Fr;
 use crate::gkr::circuit::{Circuit, CircuitBuilder, Layer};
 use crate::gkr::prover::LayerRoundPoly;
-use crate::random_oracle::FixedRandomOracle;
-use crate::poly_utils::remap_to_reverse_bits_indexing;
 
 #[cfg(test)]
 pub fn get_test_round_poly_2_vars<F: Field>() -> LayerRoundPoly<F> {
@@ -20,12 +18,6 @@ pub fn get_test_round_poly_2_vars<F: Field>() -> LayerRoundPoly<F> {
         1,
         vec![210, 320].into_iter().map(|e| F::from(e as u64)).collect::<Vec<_>>(),
     );
-    // LayerRoundPoly {
-    //     add_i,
-    //     mul_i,
-    //     Wi_1_a: Wi_1.clone(),
-    //     Wi_1_b: Wi_1.clone(),
-    // }
 
     LayerRoundPoly::new(add_i, mul_i, Wi_1.clone(), Wi_1.clone())
 }
@@ -45,12 +37,6 @@ pub fn get_test_round_poly_4_vars<F: Field>() -> LayerRoundPoly<F> {
         vec![10,20,200,300].into_iter().map(|e| F::from(e as u64)).collect::<Vec<_>>(),
     );
 
-    // LayerRoundPoly {
-    //     add_i: MultilinearExtension::fix_variables(&add_i, &[F::from(3)]),
-    //     mul_i: MultilinearExtension::fix_variables(&mul_i, &[F::from(3)]),
-    //     Wi_1_a: Wi_1.clone(),
-    //     Wi_1_b: Wi_1.clone(),
-    // }
     LayerRoundPoly::new(
         MultilinearExtension::fix_variables(&add_i, &[F::from(3)]),
         MultilinearExtension::fix_variables(&mul_i, &[F::from(3)]),
@@ -61,29 +47,6 @@ pub fn get_test_round_poly_4_vars<F: Field>() -> LayerRoundPoly<F> {
 
 #[cfg(test)]
 pub fn get_test_circuit() -> Circuit<Fr> {
-    // let circuit = Circuit {
-    //     inputs: vec![10, 200, 20, 300].into_iter().map(Fr::from).collect(),
-    //     layers: vec![
-    //         Layer {
-    //             gates: vec![
-    //                 crate::gkr::circuit::GateType::AddGate(crate::gkr::circuit::Gate {
-    //                     inputs: (0, 1),
-    //                 }),
-    //                 crate::gkr::circuit::GateType::AddGate(crate::gkr::circuit::Gate {
-    //                     inputs: (2, 3),
-    //                 }),
-    //             ]
-    //         },
-    //         crate::gkr::circuit::Layer {
-    //             gates: vec![
-    //                 crate::gkr::circuit::GateType::MulGate(crate::gkr::circuit::Gate {
-    //                     inputs: (0, 1),
-    //                 }),
-    //             ]
-    //         },
-    //     ],
-    // };
-    
     let circuit = CircuitBuilder::new(
         vec![10, 200, 20, 300].into_iter().map(Fr::from).collect()
     )
@@ -100,10 +63,3 @@ pub fn get_test_circuit() -> Circuit<Fr> {
 
     circuit
 }
-
-// #[cfg(test)]
-// pub fn test_fixed_random_oracle<F: Field>() -> FixedRandomOracle<F> {
-//     let test_values = vec![3,22,12,93,8181,12398,123].into_iter().map(F::from).collect::<Vec<_>>();
-//     
-//     FixedRandomOracle::new(test_values)
-// }

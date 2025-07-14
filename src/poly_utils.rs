@@ -288,4 +288,22 @@ mod tests {
         assert_eq!(l[0].coeffs, [Fr::from(3), Fr::one()]);
         assert_eq!(l[1].coeffs, [Fr::from(7), Fr::from(-2)]);
     }
+
+    #[test]
+    fn test_interpolate_padded() {
+        let evals = to_f::<Fr>(vec![0,1,2,3,4,5]);
+        
+        let poly = interpolate(&evals);
+        
+        assert_eq!(poly.num_vars(), 3);
+        
+        assert_eq!(poly.evaluate(&to_f(vec![0,0,0])), Fr::from(0));
+        assert_eq!(poly.evaluate(&to_f(vec![0,0,1])), Fr::from(1));
+        assert_eq!(poly.evaluate(&to_f(vec![0,1,0])), Fr::from(2));
+        assert_eq!(poly.evaluate(&to_f(vec![0,1,1])), Fr::from(3));
+        assert_eq!(poly.evaluate(&to_f(vec![1,0,0])), Fr::from(4));
+        assert_eq!(poly.evaluate(&to_f(vec![1,0,1])), Fr::from(5));
+        assert_eq!(poly.evaluate(&to_f(vec![1,1,0])), Fr::from(0));
+        assert_eq!(poly.evaluate(&to_f(vec![1,1,1])), Fr::from(0));
+    }
 }

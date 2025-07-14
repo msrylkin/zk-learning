@@ -1,4 +1,3 @@
-use std::fmt::Debug;
 use ark_ff::Field;
 use crate::random_oracle::RandomOracle;
 use crate::sumcheck::proof::{SumCheckProof, SumCheckStep};

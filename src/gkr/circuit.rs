@@ -1,6 +1,6 @@
 use ark_ff::Field;
 use ark_poly::DenseMultilinearExtension;
-use crate::poly_utils::{get_bits, reverse_bits};
+use crate::poly_utils::{reverse_bits};
 
 #[derive(Debug)]
 struct Gate {

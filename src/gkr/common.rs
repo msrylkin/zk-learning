@@ -13,7 +13,7 @@ pub struct GKRProofLayer<F: Field> {
 #[derive(Debug)]
 pub struct GKRProof<F: Field> {
     pub layers: Vec<GKRProofLayer<F>>,
-    pub outputs: Vec<F>,
+    // pub outputs: Vec<F>,
     pub inputs: Vec<F>,
     pub r0: Vec<F>,
     pub W0: DenseMultilinearExtension<F>,

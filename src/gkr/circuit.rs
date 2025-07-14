@@ -188,7 +188,7 @@ impl<F: Field> Circuit<F> {
         DenseMultilinearExtension::from_evaluations_vec(total_vars_num, evals)
     }
 
-    fn get_bottom_layer_gates_count(&self, layer_i: usize) -> usize {
+    pub fn get_bottom_layer_gates_count(&self, layer_i: usize) -> usize {
         match layer_i {
             0 => self.inputs.len(),
             _ => self.layers[layer_i - 1].gates.len(),

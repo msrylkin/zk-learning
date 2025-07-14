@@ -196,6 +196,7 @@ pub fn prove<F: Field, O: RandomOracle<Item = F>>(
         spent_points += 1;
 
         ri = l.iter().map(|li| li.evaluate(&r_star)).collect();
+        println!("next ri {:?}", ri);
 
         gkr_proof_layers.push(GKRProofLayer {
             q,
@@ -206,7 +207,7 @@ pub fn prove<F: Field, O: RandomOracle<Item = F>>(
 
     GKRProof {
         W0,
-        outputs: outputs.clone(),
+        // outputs: outputs.clone(),
         inputs: solution_inputs,
         layers: gkr_proof_layers.into_iter().rev().collect(),
         r0,

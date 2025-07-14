@@ -5,7 +5,6 @@ use crate::gkr::circuit::{Circuit, Solution};
 use crate::gkr::common::{GKRProof, GKRProofLayer};
 use crate::random_oracle::RandomOracle;
 use crate::poly_utils::{get_bits, interpolate, line, restrict_poly, reverse_bits, to_two_or_one_degree};
-use crate::sumcheck;
 use crate::sumcheck::{SumCheckPoly, SumCheckProtocol};
 
 #[derive(Debug, Clone)]
@@ -20,14 +19,13 @@ impl<F: Field> LayerRoundPoly<F> {
     pub fn new(
         add_i: DenseMultilinearExtension<F>,
         mul_i: DenseMultilinearExtension<F>,
-        Wi_1_a: DenseMultilinearExtension<F>,
-        Wi_1_b: DenseMultilinearExtension<F>,
+        Wi_1: DenseMultilinearExtension<F>,
     ) -> Self {
         Self {
             add_i,
             mul_i,
-            Wi_1_a,
-            Wi_1_b,
+            Wi_1_a: Wi_1.clone(),
+            Wi_1_b: Wi_1,
         }
     }
 }
@@ -196,7 +194,6 @@ pub fn prove<F: Field, O: RandomOracle<Item = F>>(
         spent_points += 1;
 
         ri = l.iter().map(|li| li.evaluate(&r_star)).collect();
-        println!("next ri {:?}", ri);
 
         gkr_proof_layers.push(GKRProofLayer {
             q,
@@ -207,7 +204,6 @@ pub fn prove<F: Field, O: RandomOracle<Item = F>>(
 
     GKRProof {
         W0,
-        // outputs: outputs.clone(),
         inputs: solution_inputs,
         layers: gkr_proof_layers.into_iter().rev().collect(),
         r0,

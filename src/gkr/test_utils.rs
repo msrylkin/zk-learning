@@ -19,7 +19,7 @@ pub fn get_test_round_poly_2_vars<F: Field>() -> LayerRoundPoly<F> {
         vec![210, 320].into_iter().map(|e| F::from(e as u64)).collect::<Vec<_>>(),
     );
 
-    LayerRoundPoly::new(add_i, mul_i, Wi_1.clone(), Wi_1.clone())
+    LayerRoundPoly::new(add_i, mul_i, Wi_1)
 }
 
 #[cfg(test)]
@@ -40,8 +40,7 @@ pub fn get_test_round_poly_4_vars<F: Field>() -> LayerRoundPoly<F> {
     LayerRoundPoly::new(
         MultilinearExtension::fix_variables(&add_i, &[F::from(3)]),
         MultilinearExtension::fix_variables(&mul_i, &[F::from(3)]),
-        Wi_1.clone(),
-        Wi_1.clone(),
+        Wi_1,
     )
 }
 

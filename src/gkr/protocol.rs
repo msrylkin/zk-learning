@@ -1,11 +1,9 @@
-use std::pin::{pin, Pin};
-use std::rc::Rc;
 use ark_ff::Field;
 use crate::gkr::circuit::{Circuit, Solution};
 use crate::gkr::common::GKRProof;
 use crate::gkr::prover::prove;
 use crate::gkr::verifier::verify;
-use crate::random_oracle::{FixedRandomOracle, RandomOracle};
+use crate::random_oracle::{RandomOracle};
 use crate::sumcheck::SumCheckProtocol;
 
 pub struct GKRProtocol<'a, R: RandomOracle> {

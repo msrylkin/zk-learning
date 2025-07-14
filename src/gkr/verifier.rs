@@ -1,4 +1,3 @@
-use std::ops::Div;
 use ark_ff::Field;
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension, Polynomial};
 use ark_poly::univariate::DensePolynomial;
@@ -6,11 +5,10 @@ use crate::gkr::circuit::Circuit;
 use crate::gkr::common::{GKRProof, GKRProofLayer};
 use crate::poly_utils::{interpolate, line};
 use crate::random_oracle::RandomOracle;
-use crate::sumcheck;
 use crate::sumcheck::{OracleEvaluation, SumCheckProtocol};
 
 #[derive(Debug, Clone)]
-struct GKRFinalOracle<F: Field> {
+pub struct GKRFinalOracle<F: Field> {
     mul_i: DenseMultilinearExtension<F>,
     add_i: DenseMultilinearExtension<F>,
     q: DensePolynomial<F>
@@ -50,7 +48,7 @@ pub fn verify<F: Field, R: RandomOracle<Item = F>>(
         let (b, c) = used_r.split_at(used_r.len() / 2);
         let l = line(b, c);
         
-        let q_max_degree = circuit.get_bottom_layer_gates_count(i);
+        let q_max_degree = (circuit.get_bottom_layer_gates_count(i) as f64).log2().ceil() as usize;
         assert!(q.degree() <= q_max_degree);
 
         let final_oracle = GKRFinalOracle::new(add_fixed, mul_fixed, q.clone());

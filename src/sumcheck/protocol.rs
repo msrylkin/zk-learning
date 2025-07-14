@@ -1,4 +1,3 @@
-use ark_ff::Field;
 use crate::random_oracle::RandomOracle;
 use crate::sumcheck::prover::prove;
 use crate::sumcheck::{OracleEvaluation, SumCheckPoly, SumCheckProof};

@@ -1,4 +1,3 @@
-pub(crate) mod gkr;
 mod circuit;
 mod prover;
 mod verifier;
@@ -118,6 +117,24 @@ mod tests {
 
         // mess the some poly coeffs
         gkr_proof.layers[0].sumcheck_proof.steps[1].poly.coeffs[1] = Fr::from(999);
+
+        // must panic
+        gkr_protocol.verify(&circuit, &gkr_proof);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_invalid_q_degree() {
+        let circuit = get_test_circuit();
+        let solution = circuit.solve();
+
+        let random_oracle = get_test_random_oracle();
+        let gkr_protocol = GKRProtocol::new(&random_oracle);
+
+        let mut gkr_proof = gkr_protocol.prove(&circuit, &solution);
+
+        // mess the some poly coeffs
+        gkr_proof.layers[0].q.coeffs.push(Fr::from(999));
 
         // must panic
         gkr_protocol.verify(&circuit, &gkr_proof);

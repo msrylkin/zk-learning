@@ -149,8 +149,8 @@ impl<F: Field> SumCheckPoly<F> for LayerRoundPoly<F> {
 pub fn prove<F: Field, O: RandomOracle<Item = F>>(
     circuit: &Circuit<F>,
     solution: &Solution<F>,
-    // random_points: &[F],
     random_oracle: &O,
+    sum_check_protocol: &SumCheckProtocol<O>,
 ) -> GKRProof<F> {
     let solution_evaluations = solution.to_evaluations();
     let solution_inputs = solution.inputs();
@@ -158,7 +158,6 @@ pub fn prove<F: Field, O: RandomOracle<Item = F>>(
 
     let W0 = interpolate(&outputs);
     let mut spent_points = MultilinearExtension::num_vars(&W0);
-    // let r0 = random_points[..spent_points].to_vec();
     let r0 = random_oracle.get_randomness(spent_points);
     let mut ri = r0.clone();
 
@@ -185,8 +184,7 @@ pub fn prove<F: Field, O: RandomOracle<Item = F>>(
             Wi_1_b: Wi_1.clone(),
         };
 
-        // let sumcheck_proof = sumcheck::prove(&sc_poly);
-        let sumcheck_proof = SumCheckProtocol::prove(&sc_poly);
+        let sumcheck_proof = sum_check_protocol.prove(&sc_poly);
 
         let used_r = sumcheck_proof.get_used_randomness();
 
@@ -194,7 +192,6 @@ pub fn prove<F: Field, O: RandomOracle<Item = F>>(
         let l = line(b, c);
 
         let q = restrict_poly(&l, Wi_1);
-        // let r_star = random_points[spent_points];
         let r_star = random_oracle.get_randomness(1)[0];
         spent_points += 1;
 

@@ -9,10 +9,12 @@ mod protocol;
 #[cfg(test)]
 mod tests {
     use ark_test_curves::bls12_381::Fr;
+    use crate::gkr::protocol::GKRProtocol;
     use crate::gkr::prover::prove;
     use crate::gkr::test_utils::{get_test_circuit, test_fixed_random_oracle};
     use crate::gkr::verifier::verify;
-    use crate::sumcheck::prove as sc_prove;
+    use crate::random_oracle::FixedRandomOracle;
+
     #[test]
     fn test_prove() {
         let circuit = get_test_circuit();
@@ -21,9 +23,12 @@ mod tests {
             .into_iter()
             .map(Fr::from)
             .collect::<Vec<_>>();
-        let random_oracle = test_fixed_random_oracle();
+        // let random_oracle = test_fixed_random_oracle();
+        let random_oracle = FixedRandomOracle::new(random_points);
+        
+        let gkr_protocol = GKRProtocol::new(&random_oracle);
 
-        let gkr_proof = prove(&circuit, &solution, &random_oracle);
+        let gkr_proof = gkr_protocol.prove(&circuit, &solution);
         
         println!("{:?}", gkr_proof);
         
@@ -35,7 +40,7 @@ mod tests {
         
         assert_eq!(gkr_proof.layers.len(), 2);
         
-        verify(&circuit, &gkr_proof);
+        gkr_protocol.verify(&circuit, &gkr_proof);
         // layer 1
         // assert_eq!(gkr_proof.layers[0].r_star, Fr::from(22));
         // assert_eq!(gkr_proof.layers[0], GKRProofLayer {

@@ -4,15 +4,15 @@ use crate::sumcheck::prover::prove;
 use crate::sumcheck::{OracleEvaluation, SumCheckPoly, SumCheckProof};
 use crate::sumcheck::verifier::verify;
 
-pub struct SumCheckProtocol<R> {
+pub struct SumCheckProtocol<'a, R: RandomOracle> {
     max_step_partial_poly_degree: usize,
-    random_oracle: R,
+    random_oracle: &'a R,
 }
 
-impl<R: RandomOracle> SumCheckProtocol<R> {
+impl<'a, R: RandomOracle> SumCheckProtocol<'a, R> {
     pub fn new(
         max_step_partial_poly_degree: usize,
-        random_oracle: R,
+        random_oracle: &'a R,
     ) -> Self {
         Self { max_step_partial_poly_degree, random_oracle }
     }
@@ -21,7 +21,7 @@ impl<R: RandomOracle> SumCheckProtocol<R> {
         &self,
         poly: &S,
     ) -> SumCheckProof<R::Item> {
-        prove(poly, &self.random_oracle)
+        prove(poly, self.random_oracle)
     }
     
     pub fn verify<E: OracleEvaluation<R::Item>>(

@@ -4,6 +4,7 @@ use ark_poly::univariate::DensePolynomial;
 use crate::gkr::circuit::Circuit;
 use crate::gkr::common::{GKRProof, GKRProofLayer};
 use crate::poly_utils::{interpolate, line};
+use crate::random_oracle::RandomOracle;
 use crate::sumcheck;
 use crate::sumcheck::{OracleEvaluation, SumCheckProtocol};
 
@@ -31,10 +32,10 @@ impl<F: Field> OracleEvaluation<F> for GKRFinalOracle<F> {
     }
 }
 
-pub fn verify<F: Field>(
+pub fn verify<F: Field, R: RandomOracle<Item = F>>(
     circuit: &Circuit<F>,
     proof: &GKRProof<F>,
-    sum_check_protocol: &SumCheckProtocol,
+    sum_check_protocol: &SumCheckProtocol<R>,
 ) {
     let mut mi = Polynomial::evaluate(&proof.W0, &proof.r0);
     let mut ri = proof.r0.clone();

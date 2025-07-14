@@ -45,7 +45,7 @@ impl<F: Field> RandomOracle for FixedRandomOracle<F> {
     }
 }
 
-pub struct ProxyRandomOracle<'a, P> {
+struct ProxyRandomOracle<'a, P> {
     parent: &'a P,
 }
 

@@ -5,22 +5,19 @@ use crate::gkr::circuit::{Circuit, Solution};
 use crate::gkr::common::GKRProof;
 use crate::gkr::prover::prove;
 use crate::gkr::verifier::verify;
-use crate::random_oracle::{FixedRandomOracle, ProxyRandomOracle, RandomOracle};
+use crate::random_oracle::{FixedRandomOracle, RandomOracle};
 use crate::sumcheck::SumCheckProtocol;
 
-struct GKRProtocol<'a, R: RandomOracle> {
-    random_oracle: R,
-    sum_check_protocol: SumCheckProtocol<ProxyRandomOracle<'a, R>>,
+pub struct GKRProtocol<'a, R: RandomOracle> {
+    random_oracle: &'a R,
+    sum_check_protocol: SumCheckProtocol<'a, R>,
 }
 
-impl<F: Field, R: RandomOracle<Item = F>> GKRProtocol<'_, R> {
-    pub fn new(random_oracle: &R) -> Self {
-        let random_oracle = pin!(random_oracle);
-        let proxy_oracle = ProxyRandomOracle::new(random_oracle);
-
+impl<'a, F: Field, R: RandomOracle<Item = F>> GKRProtocol<'a, R> {
+    pub fn new(random_oracle: &'a R) -> Self {
         Self {
             random_oracle,
-            sum_check_protocol: SumCheckProtocol::new(2, proxy_oracle),
+            sum_check_protocol: SumCheckProtocol::new(2, random_oracle),
         }
     }
 
@@ -29,7 +26,7 @@ impl<F: Field, R: RandomOracle<Item = F>> GKRProtocol<'_, R> {
         circuit: &Circuit<R::Item>,
         solution: &Solution<R::Item>,
     ) -> GKRProof<R::Item> {
-        prove(circuit, solution, &self.random_oracle)
+        prove(circuit, solution, self.random_oracle, &self.sum_check_protocol)
     }
     
     pub fn verify(

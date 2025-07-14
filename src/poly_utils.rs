@@ -3,7 +3,6 @@ use std::ops::Add;
 use ark_ff::Field;
 use ark_poly::{DenseMultilinearExtension, DenseUVPolynomial, MultilinearExtension, Polynomial};
 use ark_poly::univariate::DensePolynomial;
-use crate::sumcheck::SumCheckPoly;
 
 pub fn get_reversed_vars_poly<F: Field>(poly: &DenseMultilinearExtension<F>) -> DenseMultilinearExtension<F> {
     let n = MultilinearExtension::num_vars(poly);

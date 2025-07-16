@@ -62,8 +62,8 @@ fn generate_round_poly_eval_parameters(
 impl<F: Field> SumCheckPoly<F> for LayerRoundPoly<F> {
     fn get_evaluations(&self) -> Vec<F> {
         let mut res = vec![];
-        let a_num_vars = MultilinearExtension::num_vars(&self.Wi_1_a);
-        let b_num_vars = MultilinearExtension::num_vars(&self.Wi_1_b);
+        let a_num_vars = self.Wi_1_a.num_vars();
+        let b_num_vars = self.Wi_1_b.num_vars();
         let ab_num_vars = a_num_vars + b_num_vars;
         let a_domain = 1 << a_num_vars;
         let b_domain = 1 << b_num_vars;
@@ -73,7 +73,7 @@ impl<F: Field> SumCheckPoly<F> for LayerRoundPoly<F> {
                 let ab_combined_mask = (a << b_num_vars) | b;
                 let ab_combined_mask_reversed = reverse_bits(ab_combined_mask, ab_num_vars);
                 let ab_bits = get_bits(ab_combined_mask_reversed, ab_num_vars).into_iter().map(|e| F::from(e as u64)).collect::<Vec<_>>();
-                let eval = LayerRoundPoly::evaluate(&self, &ab_bits);
+                let eval = self.evaluate(&ab_bits);
 
                 res.push(eval);
             }
@@ -83,12 +83,12 @@ impl<F: Field> SumCheckPoly<F> for LayerRoundPoly<F> {
     }
 
     fn num_vars(&self) -> usize {
-        MultilinearExtension::num_vars(&self.add_i)
+        self.add_i.num_vars()
     }
 
     fn get_partial_sum_poly(&self) -> DensePolynomial<F> {
-        let a_vars = MultilinearExtension::num_vars(&self.Wi_1_a);
-        let b_vars = MultilinearExtension::num_vars(&self.Wi_1_b);
+        let a_vars = self.Wi_1_a.num_vars();
+        let b_vars = self.Wi_1_b.num_vars();
 
         let mut res_poly = DensePolynomial::from_coefficients_vec(vec![F::zero()]);
 
@@ -111,34 +111,32 @@ impl<F: Field> SumCheckPoly<F> for LayerRoundPoly<F> {
     }
 
     fn fix_variables(&self, partial_point: &[F]) -> Self {
-        if MultilinearExtension::num_vars(&self.Wi_1_a) > 0 {
+        if self.Wi_1_a.num_vars() > 0 {
             Self {
-                add_i: MultilinearExtension::fix_variables(&self.add_i, partial_point),
-                mul_i: MultilinearExtension::fix_variables(&self.mul_i, partial_point),
-                Wi_1_a: MultilinearExtension::fix_variables(&self.Wi_1_a, partial_point),
+                add_i: self.add_i.fix_variables(partial_point),
+                mul_i: self.mul_i.fix_variables(partial_point),
+                Wi_1_a: self.Wi_1_a.fix_variables(partial_point),
                 Wi_1_b: self.Wi_1_b.clone(),
             }
         } else {
             Self {
-                add_i: MultilinearExtension::fix_variables(&self.add_i, partial_point),
-                mul_i: MultilinearExtension::fix_variables(&self.mul_i, partial_point),
+                add_i: self.add_i.fix_variables(partial_point),
+                mul_i: self.mul_i.fix_variables(partial_point),
                 Wi_1_a: self.Wi_1_a.clone(),
-                Wi_1_b: MultilinearExtension::fix_variables(&self.Wi_1_b, partial_point)
+                Wi_1_b: self.Wi_1_b.fix_variables(partial_point),
             }
         }
     }
 
     fn evaluate(&self, point: &[F]) -> F {
         let binding = point.to_vec();
-        let a_vars = MultilinearExtension::num_vars(&self.Wi_1_a);
+        let a_vars = self.Wi_1_a.num_vars();
         let (a_bits, b_bits) = binding.split_at(a_vars);
         let a_bits = a_bits.to_vec();
         let b_bits = b_bits.to_vec();
-
-        let add_eval = Polynomial::evaluate(&self.add_i, &point.to_vec())
-            * (Polynomial::evaluate(&self.Wi_1_a, &a_bits) + Polynomial::evaluate(&self.Wi_1_b, &b_bits));
-        let mul_eval = Polynomial::evaluate(&self.mul_i, &point.to_vec())
-            * (Polynomial::evaluate(&self.Wi_1_a, &a_bits) * Polynomial::evaluate(&self.Wi_1_b, &b_bits));
+        
+        let add_eval = self.add_i.evaluate(&point.to_vec()) * (self.Wi_1_a.evaluate(&a_bits) + self.Wi_1_b.evaluate(&b_bits));
+        let mul_eval = self.mul_i.evaluate(&point.to_vec()) * (self.Wi_1_a.evaluate(&a_bits) * self.Wi_1_b.evaluate(&b_bits));
 
         add_eval + mul_eval
     }
@@ -155,8 +153,7 @@ pub fn prove<F: Field, O: RandomOracle<Item = F>>(
     let outputs = solution_evaluations.last().unwrap();
 
     let W0 = interpolate(&outputs);
-    let mut spent_points = MultilinearExtension::num_vars(&W0);
-    let r0 = random_oracle.get_randomness(spent_points);
+    let r0 = random_oracle.get_randomness(W0.num_vars());
     let mut ri = r0.clone();
 
     let mut gkr_proof_layers = vec![];
@@ -172,8 +169,8 @@ pub fn prove<F: Field, O: RandomOracle<Item = F>>(
             }
         };
 
-        let add_fixed = MultilinearExtension::fix_variables(&add_poly, &ri);
-        let mul_fixed = MultilinearExtension::fix_variables(&mul_poly, &ri);
+        let add_fixed = add_poly.fix_variables(&ri);
+        let mul_fixed = mul_poly.fix_variables(&ri);
 
         let sc_poly = LayerRoundPoly {
             add_i: add_fixed.clone(),
@@ -191,7 +188,6 @@ pub fn prove<F: Field, O: RandomOracle<Item = F>>(
 
         let q = restrict_poly(&l, Wi_1);
         let r_star = random_oracle.get_randomness(1)[0];
-        spent_points += 1;
 
         ri = l.iter().map(|li| li.evaluate(&r_star)).collect();
 

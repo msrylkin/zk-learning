@@ -5,7 +5,7 @@ use ark_poly::{DenseMultilinearExtension, DenseUVPolynomial, MultilinearExtensio
 use ark_poly::univariate::DensePolynomial;
 
 pub fn get_reversed_vars_poly<F: Field>(poly: &DenseMultilinearExtension<F>) -> DenseMultilinearExtension<F> {
-    let n = MultilinearExtension::num_vars(poly);
+    let n = poly.num_vars();
     let mut res_poly = poly.clone();
 
 
@@ -47,7 +47,7 @@ pub fn restrict_poly<F: Field>(
     line: &Vec<DensePolynomial<F>>,
     w: DenseMultilinearExtension<F>,
 ) -> DensePolynomial<F> {
-    let num_vars = MultilinearExtension::num_vars(&w);
+    let num_vars = w.num_vars();
     assert_eq!(line.len(), num_vars);
 
     let line_rev = line.clone().into_iter().rev().collect::<Vec<_>>();
@@ -153,19 +153,19 @@ pub fn get_evaluations_by_mask<F: Field>(
     mask: usize,
     nvars: usize,
 ) -> Vec<F> {
-    if nvars == MultilinearExtension::num_vars(poly) {
+    if nvars == poly.num_vars() {
         let bits = get_bits(mask, nvars).into_iter().map(|e| F::from(e as u64)).collect::<Vec<_>>();
         return vec![Polynomial::evaluate(poly, &bits)];
     }
 
-    if nvars != MultilinearExtension::num_vars(poly) - 1 {
+    if nvars != poly.num_vars() - 1 {
         todo!("only single variable supported for now");
     }
 
     let bit_set = 1 << nvars;
     let bit_set_negated = !bit_set;
     let mut mle_evals = poly.to_evaluations();
-    remap_to_reverse_bits_indexing(&mut mle_evals, MultilinearExtension::num_vars(poly));
+    remap_to_reverse_bits_indexing(&mut mle_evals, poly.num_vars());
 
     let index_1 = bit_set_negated & mask;
     let index_2 = bit_set | mask;

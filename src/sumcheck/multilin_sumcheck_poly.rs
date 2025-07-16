@@ -69,8 +69,8 @@ impl<F: Field> SumCheckPoly<F> for DenseMultilinSumcheckPoly<F> {
         interpolate_univariate_on_evals(&current_poly.get_evaluations().try_into().unwrap())
     }
 
-    fn fix_variables(&self, partial_point: &[F]) -> Self {
-        DenseMultilinSumcheckPoly(self.0.fix_variables(partial_point))
+    fn fix_variable(&self, e: F) -> Self {
+        DenseMultilinSumcheckPoly(self.0.fix_variables(&[e]))
     }
 
     fn evaluate(&self, point: &[F]) -> F {

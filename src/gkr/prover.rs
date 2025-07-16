@@ -110,20 +110,20 @@ impl<F: Field> SumCheckPoly<F> for LayerRoundPoly<F> {
         res_poly
     }
 
-    fn fix_variables(&self, partial_point: &[F]) -> Self {
+    fn fix_variable(&self, e: F) -> Self {
         if self.Wi_1_a.num_vars() > 0 {
             Self {
-                add_i: self.add_i.fix_variables(partial_point),
-                mul_i: self.mul_i.fix_variables(partial_point),
-                Wi_1_a: self.Wi_1_a.fix_variables(partial_point),
+                add_i: self.add_i.fix_variables(&[e]),
+                mul_i: self.mul_i.fix_variables(&[e]),
+                Wi_1_a: self.Wi_1_a.fix_variables(&[e]),
                 Wi_1_b: self.Wi_1_b.clone(),
             }
         } else {
             Self {
-                add_i: self.add_i.fix_variables(partial_point),
-                mul_i: self.mul_i.fix_variables(partial_point),
+                add_i: self.add_i.fix_variables(&[e]),
+                mul_i: self.mul_i.fix_variables(&[e]),
                 Wi_1_a: self.Wi_1_a.clone(),
-                Wi_1_b: self.Wi_1_b.fix_variables(partial_point),
+                Wi_1_b: self.Wi_1_b.fix_variables(&[e]),
             }
         }
     }
@@ -309,7 +309,7 @@ mod tests {
 
         assert_eq!(partial_sum_poly_1.coeffs, [Fr::from(67200), Fr::from(-32000), Fr::from(-35200)]);
 
-        let round_poly = round_poly.fix_variables(&[Fr::from(32)]);
+        let round_poly = round_poly.fix_variable(Fr::from(32));
         let partial_sum_poly_2 = round_poly.get_partial_sum_poly();
 
         assert_eq!(partial_sum_poly_2.coeffs, [Fr::zero(), Fr::from(-24282300), Fr::from(-12719300)])
@@ -322,17 +322,17 @@ mod tests {
 
         assert_eq!(partial_sum_poly_1.coeffs, [Fr::from(-420), Fr::from(1330), Fr::from(50)]);
 
-        let round_poly = round_poly.fix_variables(&[Fr::from(4)]);
+        let round_poly = round_poly.fix_variable(Fr::from(4));
         let partial_sum_poly_2 = round_poly.get_partial_sum_poly();
 
         assert_eq!(partial_sum_poly_2.coeffs, [Fr::from(5700), Fr::from(4200), Fr::from(-9900)]);
 
-        let round_poly = round_poly.fix_variables(&[Fr::from(5)]);
+        let round_poly = round_poly.fix_variable(Fr::from(5));
         let partial_sum_poly_3 = round_poly.get_partial_sum_poly();
 
         assert_eq!(partial_sum_poly_3.coeffs, [Fr::from(-72000), Fr::from(-74400), Fr::from(-2400)]);
 
-        let round_poly = round_poly.fix_variables(&[Fr::from(8)]);
+        let round_poly = round_poly.fix_variable(Fr::from(8));
         let partial_sum_poly_4 = round_poly.get_partial_sum_poly();
 
         assert_eq!(partial_sum_poly_4.coeffs, [Fr::from(0), Fr::from(-624240), Fr::from(-196560)]);

@@ -12,7 +12,7 @@ pub trait SumCheckPoly<F: Field> {
 
     fn get_partial_sum_poly(&self) -> DensePolynomial<F>;
 
-    fn fix_variables(&self, partial_point: &[F]) -> Self;
+    fn fix_variable(&self, e: F) -> Self;
 
     fn evaluate(&self, point: &[F]) -> F;
 }

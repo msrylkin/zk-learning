@@ -17,7 +17,7 @@ pub fn prove<F: Field, S: SumCheckPoly<F> + Clone, R: RandomOracle<Item = F>>(
     let mut current_r = random_oracle.get_randomness(1)[0];
 
     for _ in 1..num_vars {
-        current_poly = current_poly.fix_variables(&[current_r]);
+        current_poly = current_poly.fix_variable(current_r);
         let partial_sum_poly = current_poly.get_partial_sum_poly();
 
         sc_steps.push(SumCheckStep::new(partial_sum_poly, current_r));

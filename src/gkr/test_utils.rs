@@ -40,8 +40,8 @@ pub fn get_test_round_poly_4_vars<F: Field>() -> LayerRoundPoly<F> {
     );
 
     LayerRoundPoly::new(
-        MultilinearExtension::fix_variables(&add_i, &[F::from(3)]),
-        MultilinearExtension::fix_variables(&mul_i, &[F::from(3)]),
+        add_i.fix_variables(&[F::from(3)]),
+        mul_i.fix_variables(&[F::from(3)]),
         Wi_1,
     )
 }

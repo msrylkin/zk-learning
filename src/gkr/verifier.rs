@@ -24,8 +24,8 @@ impl<F: Field> OracleEvaluation<F> for GKRFinalOracle<F> {
     fn final_eval(&self, r: &[F]) -> F {
         let q_0 = self.q.evaluate(&F::zero());
         let q_1 = self.q.evaluate(&F::one());
-        let add_eval = ark_poly::Polynomial::evaluate(&self.add_i, &r.to_vec()) * (q_0 + q_1);
-        let mul_eval = ark_poly::Polynomial::evaluate(&self.mul_i, &r.to_vec()) * (q_0 * q_1);
+        let add_eval = self.add_i.evaluate(&r.to_vec()) * (q_0 + q_1);
+        let mul_eval = self.mul_i.evaluate(&r.to_vec()) * (q_0 * q_1);
 
         add_eval + mul_eval
     }
@@ -42,8 +42,8 @@ pub fn verify<F: Field, R: RandomOracle<Item = F>>(
     for (i, GKRProofLayer { q, r_star, sumcheck_proof }) in proof.layers.iter().enumerate().rev() {
         let add_poly = circuit.add_i(i);
         let mul_poly = circuit.mul_i(i);
-        let add_fixed = MultilinearExtension::fix_variables(&add_poly, &ri);
-        let mul_fixed = MultilinearExtension::fix_variables(&mul_poly, &ri);
+        let add_fixed = add_poly.fix_variables(&ri);
+        let mul_fixed = mul_poly.fix_variables(&ri);
         let used_r = sumcheck_proof.get_used_randomness();
         let (b, c) = used_r.split_at(used_r.len() / 2);
         let l = line(b, c);
@@ -60,7 +60,7 @@ pub fn verify<F: Field, R: RandomOracle<Item = F>>(
     }
 
     let last_w = interpolate(&proof.inputs);
-    let last_w_r = Polynomial::evaluate(&last_w, &ri.to_vec());
+    let last_w_r = last_w.evaluate(&ri.to_vec());
 
     assert_eq!(last_w_r, mi);
 }

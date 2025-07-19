@@ -172,12 +172,11 @@ pub fn prove<F: Field, O: RandomOracle<Item = F>>(
         let add_fixed = add_poly.fix_variables(&ri);
         let mul_fixed = mul_poly.fix_variables(&ri);
 
-        let sc_poly = LayerRoundPoly {
-            add_i: add_fixed.clone(),
-            mul_i: mul_fixed.clone(),
-            Wi_1_a: Wi_1.clone(),
-            Wi_1_b: Wi_1.clone(),
-        };
+        let sc_poly = LayerRoundPoly::new(
+            add_fixed,
+            mul_fixed,
+            Wi_1.clone()
+        );
 
         let sumcheck_proof = sum_check_protocol.prove(&sc_poly);
 

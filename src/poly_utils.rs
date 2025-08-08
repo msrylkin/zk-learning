@@ -179,7 +179,7 @@ pub fn get_evaluations_by_mask<F: Field>(
 }
 
 #[derive(Debug)]
-struct MultiplicativeSubgroup<F: PrimeField>(Vec<F>);
+struct MultiplicativeSubgroup<F: PrimeField>(Vec<F>, F);
 
 impl<F: PrimeField> Deref for MultiplicativeSubgroup<F> {
     type Target = Vec<F>;
@@ -189,8 +189,8 @@ impl<F: PrimeField> Deref for MultiplicativeSubgroup<F> {
 }
 
 impl<F: PrimeField> MultiplicativeSubgroup<F> {
-    pub fn new(vec: Vec<F>) -> Self {
-        Self(vec)
+    pub fn new(vec: Vec<F>, generator: F) -> Self {
+        Self(vec, generator)
     }
 
     pub fn order(&self) -> usize {
@@ -249,7 +249,7 @@ fn generate_multiplicative_subgroup<const N: u64, F: PrimeField>() -> Multiplica
         .map(|i| h.pow([i]))
         .collect::<Vec<_>>();
 
-    MultiplicativeSubgroup::new(H)
+    MultiplicativeSubgroup::new(H, h)
 }
 
 pub fn to_f<F: Field>(vals: Vec<i64>) -> Vec<F> {

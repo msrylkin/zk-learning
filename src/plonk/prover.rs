@@ -5,6 +5,7 @@ use ark_std::iterable::Iterable;
 use ark_std::Zero;
 use ark_test_curves::bls12_381::Fr;
 use crate::plonk::circuit::CompiledCircuit;
+use crate::plonk::permutation::PermutationArgument;
 use crate::poly_utils::generate_multiplicative_subgroup;
 
 fn prove<F: FftField + PrimeField>(
@@ -146,144 +147,144 @@ fn symmetric_sums<F: Field>(values: &[F], max_k: usize) -> Vec<F> {
     dp.remove(dp.len() - 1)
 }
 
-fn permutation_product_acc<F: FftField + PrimeField>(
-    a: &DensePolynomial<F>,
-    b: &DensePolynomial<F>,
-    c: &DensePolynomial<F>,
-    perm_poly_1: &DensePolynomial<F>,
-    perm_poly_2: &DensePolynomial<F>,
-    perm_poly_3: &DensePolynomial<F>,
-    beta: &F,
-    gamma: &F,
-    domain: &[F],
-    max_i: usize,
-) -> F {
-    domain
-        .iter()
-        .take(max_i)
-        .map(|w|permutation_product(a, b, c, perm_poly_1, perm_poly_2, perm_poly_3, beta, gamma, &w))
-        .product()
-}
+// fn permutation_product_acc<F: FftField + PrimeField>(
+//     a: &DensePolynomial<F>,
+//     b: &DensePolynomial<F>,
+//     c: &DensePolynomial<F>,
+//     perm_poly_1: &DensePolynomial<F>,
+//     perm_poly_2: &DensePolynomial<F>,
+//     perm_poly_3: &DensePolynomial<F>,
+//     beta: &F,
+//     gamma: &F,
+//     domain: &[F],
+//     max_i: usize,
+// ) -> F {
+//     domain
+//         .iter()
+//         .take(max_i)
+//         .map(|w|permutation_product(a, b, c, perm_poly_1, perm_poly_2, perm_poly_3, beta, gamma, &w))
+//         .product()
+// }
 
-fn permutation_product<F: FftField + PrimeField>(
-    a: &DensePolynomial<F>,
-    b: &DensePolynomial<F>,
-    c: &DensePolynomial<F>,
-    perm_poly_1: &DensePolynomial<F>,
-    perm_poly_2: &DensePolynomial<F>,
-    perm_poly_3: &DensePolynomial<F>,
-    beta: &F,
-    gamma: &F,
-    point: &F,
-) -> F {
-    hash_permutation(a, &perm_poly_1, point, &beta, &gamma)
-    * hash_permutation(b, &perm_poly_2, point, &beta, &gamma)
-    * hash_permutation(c, &perm_poly_3, point, &beta, &gamma)
-}
+// fn permutation_product<F: FftField + PrimeField>(
+//     a: &DensePolynomial<F>,
+//     b: &DensePolynomial<F>,
+//     c: &DensePolynomial<F>,
+//     perm_poly_1: &DensePolynomial<F>,
+//     perm_poly_2: &DensePolynomial<F>,
+//     perm_poly_3: &DensePolynomial<F>,
+//     beta: &F,
+//     gamma: &F,
+//     point: &F,
+// ) -> F {
+//     hash_permutation(a, &perm_poly_1, point, &beta, &gamma)
+//     * hash_permutation(b, &perm_poly_2, point, &beta, &gamma)
+//     * hash_permutation(c, &perm_poly_3, point, &beta, &gamma)
+// }
 
-fn numerator_poly<F: FftField + PrimeField>(
-    a: &DensePolynomial<F>,
-    b: &DensePolynomial<F>,
-    c: &DensePolynomial<F>,
-    compiled_circuit: &CompiledCircuit<F>,
-    beta: &F,
-    gamma: &F,
-    domain: &[F],
-    k1: F,
-    k2: F,
-) -> DensePolynomial<F> {
-    let (sid_1, sid_2, sid_3) = compiled_circuit.get_s_id_polys(domain, k1, k2);
-    let values = domain.iter().map(|w| {
-        permutation_product(a, b, c, &sid_1, &sid_2, &sid_3, &beta, &gamma, &w)
-    }).collect::<Vec<_>>();
+// fn numerator_poly<F: FftField + PrimeField>(
+//     a: &DensePolynomial<F>,
+//     b: &DensePolynomial<F>,
+//     c: &DensePolynomial<F>,
+//     compiled_circuit: &CompiledCircuit<F>,
+//     beta: &F,
+//     gamma: &F,
+//     domain: &[F],
+//     k1: F,
+//     k2: F,
+// ) -> DensePolynomial<F> {
+//     let (sid_1, sid_2, sid_3) = compiled_circuit.get_s_id_polys(domain, k1, k2);
+//     let values = domain.iter().map(|w| {
+//         permutation_product(a, b, c, &sid_1, &sid_2, &sid_3, &beta, &gamma, &w)
+//     }).collect::<Vec<_>>();
+//
+//     interpolate_univariate(domain, &values)
+// }
 
-    interpolate_univariate(domain, &values)
-}
+// fn denominator_poly<F: FftField + PrimeField>(
+//     a: &DensePolynomial<F>,
+//     b: &DensePolynomial<F>,
+//     c: &DensePolynomial<F>,
+//     compiled_circuit: &CompiledCircuit<F>,
+//     beta: &F,
+//     gamma: &F,
+//     domain: &[F],
+//     k1: F,
+//     k2: F,
+// ) -> DensePolynomial<F> {
+//     let (sigma_1, sigma_2, sigma_3) = compiled_circuit.get_sigma_polys(domain, k1, k2);
+//     let values = domain.iter().map(|w| {
+//         permutation_product(a, b, c, &sigma_1, &sigma_2, &sigma_3, &beta, &gamma, &w)
+//     }).collect::<Vec<_>>();
+//
+//     interpolate_univariate(domain, &values)
+// }
 
-fn denominator_poly<F: FftField + PrimeField>(
-    a: &DensePolynomial<F>,
-    b: &DensePolynomial<F>,
-    c: &DensePolynomial<F>,
-    compiled_circuit: &CompiledCircuit<F>,
-    beta: &F,
-    gamma: &F,
-    domain: &[F],
-    k1: F,
-    k2: F,
-) -> DensePolynomial<F> {
-    let (sigma_1, sigma_2, sigma_3) = compiled_circuit.get_sigma_polys(domain, k1, k2);
-    let values = domain.iter().map(|w| {
-        permutation_product(a, b, c, &sigma_1, &sigma_2, &sigma_3, &beta, &gamma, &w)
-    }).collect::<Vec<_>>();
-
-    interpolate_univariate(domain, &values)
-}
-
-fn hash_permutation<F: PrimeField + FftField>(
-    f: &DensePolynomial<F>,
-    perm_poly: &DensePolynomial<F>,
-    point: &F,
-    beta: &F,
-    gamma: &F,
-) -> F {
-    f.evaluate(&point) + *beta * perm_poly.evaluate(&point) + *gamma
-}
-
-fn numerator_acc<F: FftField + PrimeField>(
-    a: &DensePolynomial<F>,
-    b: &DensePolynomial<F>,
-    c: &DensePolynomial<F>,
-    compiled_circuit: &CompiledCircuit<F>,
-    beta: &F,
-    gamma: &F,
-    domain: &[F],
-    k1: F,
-    k2: F,
-    max_i: usize,
-) -> F {
-    let (sid_1, sid_2, sid_3) = compiled_circuit.get_s_id_polys(domain, k1, k2);
-
-    permutation_product_acc(
-        a,
-        b,
-        c,
-        &sid_1,
-        &sid_2,
-        &sid_3,
-        beta,
-        gamma,
-        domain,
-        max_i,
-    )
-}
-
-fn denominator_acc<F: FftField + PrimeField>(
-    a: &DensePolynomial<F>,
-    b: &DensePolynomial<F>,
-    c: &DensePolynomial<F>,
-    compiled_circuit: &CompiledCircuit<F>,
-    beta: &F,
-    gamma: &F,
-    domain: &[F],
-    k1: F,
-    k2: F,
-    max_i: usize,
-) -> F {
-    let (s_sigma_1, s_sigma_2, s_sigma_3) = compiled_circuit.get_sigma_polys(domain, k1, k2);
-
-    permutation_product_acc(
-        a,
-        b,
-        c,
-        &s_sigma_1,
-        &s_sigma_2,
-        &s_sigma_3,
-        beta,
-        gamma,
-        domain,
-        max_i,
-    )
-}
+// fn hash_permutation<F: PrimeField + FftField>(
+//     f: &DensePolynomial<F>,
+//     perm_poly: &DensePolynomial<F>,
+//     point: &F,
+//     beta: &F,
+//     gamma: &F,
+// ) -> F {
+//     f.evaluate(&point) + *beta * perm_poly.evaluate(&point) + *gamma
+// }
+//
+// fn numerator_acc<F: FftField + PrimeField>(
+//     a: &DensePolynomial<F>,
+//     b: &DensePolynomial<F>,
+//     c: &DensePolynomial<F>,
+//     compiled_circuit: &CompiledCircuit<F>,
+//     beta: &F,
+//     gamma: &F,
+//     domain: &[F],
+//     k1: F,
+//     k2: F,
+//     max_i: usize,
+// ) -> F {
+//     let (sid_1, sid_2, sid_3) = compiled_circuit.get_s_id_polys(domain, k1, k2);
+//
+//     permutation_product_acc(
+//         a,
+//         b,
+//         c,
+//         &sid_1,
+//         &sid_2,
+//         &sid_3,
+//         beta,
+//         gamma,
+//         domain,
+//         max_i,
+//     )
+// }
+//
+// fn denominator_acc<F: FftField + PrimeField>(
+//     a: &DensePolynomial<F>,
+//     b: &DensePolynomial<F>,
+//     c: &DensePolynomial<F>,
+//     compiled_circuit: &CompiledCircuit<F>,
+//     beta: &F,
+//     gamma: &F,
+//     domain: &[F],
+//     k1: F,
+//     k2: F,
+//     max_i: usize,
+// ) -> F {
+//     let (s_sigma_1, s_sigma_2, s_sigma_3) = compiled_circuit.get_sigma_polys(domain, k1, k2);
+//
+//     permutation_product_acc(
+//         a,
+//         b,
+//         c,
+//         &s_sigma_1,
+//         &s_sigma_2,
+//         &s_sigma_3,
+//         beta,
+//         gamma,
+//         domain,
+//         max_i,
+//     )
+// }
 
 fn divide_by_vanishing<F: FftField + PrimeField>(poly: &DensePolynomial<F>, Zh: &SparsePolynomial<F>) -> DensePolynomial<F> {
     let res = DenseOrSparsePolynomial::from(poly).divide_with_q_and_r(&DenseOrSparsePolynomial::from(Zh));
@@ -308,14 +309,15 @@ fn z_poly<F: FftField + PrimeField>(
     k1: F,
     k2: F,
 ) -> DensePolynomial<F> {
+    let solution = compiled_circuit.get_solution(domain, k1, k2);
+    let permutation_argument = PermutationArgument::new(domain, beta, gamma, &solution);
     let values = (0..domain.len())
         .map(|i| {
-            let num = numerator_acc(a, b, c, compiled_circuit, &beta, &gamma, domain, k1, k2, i);
-            let denom = denominator_acc(a, b, c, compiled_circuit, &beta, &gamma, domain, k1, k2, i);
+            let num = permutation_argument.numerator_acc(i);
+            let denom = permutation_argument.denominator_acc(i);
             println!("i {i} num / denom {}", num / denom);
 
             num / denom
-
         })
         .collect::<Vec<_>>();
 
@@ -324,7 +326,11 @@ fn z_poly<F: FftField + PrimeField>(
 
 fn shift_poly<F: Field>(poly: &DensePolynomial<F>, scalar: F) -> DensePolynomial<F> {
     DensePolynomial::from_coefficients_vec(
-        poly.coeffs.iter().enumerate().map(|(i, c)| *c * scalar.pow(&[i as u64])).collect(),
+        poly.coeffs
+            .iter()
+            .enumerate()
+            .map(|(i, c)| *c * scalar.pow(&[i as u64]))
+            .collect(),
     )
 }
 
@@ -348,8 +354,11 @@ fn compute_big_quotient<F: FftField + PrimeField>(
     let (ql, qr, qm , qo, qc) = circuit.get_selectors(domain);
     let z_shifted = shift_poly(&z, omega);
 
-    let perm_numerator_poly = numerator_poly(a, b, c, circuit, beta, gamma, domain, k1, k2) * z;
-    let perm_denominator_poly = denominator_poly(a, b, c, circuit, beta, gamma, domain, k1, k2) * z_shifted;
+    let solution = circuit.get_solution(domain, k1, k2);
+    let perm_argument = PermutationArgument::new(domain, beta, gamma, &solution);
+
+    let perm_numerator_poly = perm_argument.numerator_poly() * z;
+    let perm_denominator_poly = perm_argument.denominator_poly() * z_shifted;
     let lagrange_base_1 = &generate_lagrange_basis_polys(domain)[0];
     let z_poly_m1 = (z - DensePolynomial::from_coefficients_slice(&[F::one()])) * lagrange_base_1;
     let alpha = F::from(123);
@@ -381,8 +390,6 @@ fn compute_big_quotient<F: FftField + PrimeField>(
     }
 
     divide_by_vanishing(&gate_check_poly, Zh)
-        // + divide_by_vanishing(&perm_numerator_poly, Zh) * alpha
-        // - divide_by_vanishing(&perm_denominator_poly, Zh) * alpha
         + divide_by_vanishing(&(perm_numerator_poly - perm_denominator_poly), Zh) * alpha
         + divide_by_vanishing(&z_poly_m1, Zh) * alpha.square()
 }
@@ -393,7 +400,8 @@ mod tests {
     use ark_std::One;
     use ark_test_curves::bls12_381::Fr;
     use crate::plonk::circuit::get_test_circuit;
-    use crate::plonk::prover::{compute_big_quotient, denominator_acc, denominator_poly, hash_permutation, interpolate_univariate, numerator_acc, numerator_poly, pick_coset_shifters, symmetric_sums, z_poly};
+    use crate::plonk::permutation::PermutationArgument;
+    use crate::plonk::prover::{compute_big_quotient, interpolate_univariate, pick_coset_shifters, symmetric_sums, z_poly};
     use crate::poly_utils::{generate_multiplicative_subgroup, to_f};
 
     #[test]
@@ -463,48 +471,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_permutation_poly_acc() {
-        let test_circuit = get_test_circuit();
-        let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
-        let (k1, k2) = pick_coset_shifters(&domain);
-        let (a, b, c) = test_circuit.get_abc_vectors();
-        let (a, b, c) = (
-            interpolate_univariate(&domain, &a),
-            interpolate_univariate(&domain, &b),
-            interpolate_univariate(&domain, &c),
-        );
 
-        let beta = Fr::from(43);
-        let gamma = Fr::from(35);
-
-        let num = numerator_acc(
-            &a,
-            &b,
-            &c,
-            &test_circuit,
-            &beta,
-            &gamma,
-            &domain,
-            k1,
-            k2,
-            domain.len(),
-        );
-        let denom = denominator_acc(
-            &a,
-            &b,
-            &c,
-            &test_circuit,
-            &beta,
-            &gamma,
-            &domain,
-            k1,
-            k2,
-            domain.len(),
-        );
-
-        assert_eq!(num / denom, Fr::one());
-    }
 
     #[test]
     fn test_z_poly() {
@@ -527,8 +494,10 @@ mod tests {
         assert_eq!(z_poly.evaluate(&Fr::one()), Fr::one());
 
         let omega= domain.generator();
-        let num_poly = numerator_poly(&a, &b, &c, &test_circuit, &beta, &gamma, &domain, k1, k2);
-        let denom_poly = denominator_poly(&a, &b, &c, &test_circuit, &beta, &gamma, &domain, k1, k2);
+        let solution = test_circuit.get_solution(&domain, k1, k2);
+        let permutation = PermutationArgument::new(&domain, &beta, &gamma, &solution);
+        let num_poly = permutation.numerator_poly();
+        let denom_poly = permutation.denominator_poly();
 
         for x in &domain {
             assert_eq!(

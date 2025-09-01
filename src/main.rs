@@ -7,6 +7,7 @@ mod sumcheck;
 mod poly_utils;
 mod gkr;
 mod random_oracle;
+mod plonk;
 
 fn main() {
     // kzg::run_kzg();

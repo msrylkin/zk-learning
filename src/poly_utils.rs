@@ -179,7 +179,7 @@ pub fn get_evaluations_by_mask<F: Field>(
 }
 
 #[derive(Debug)]
-struct MultiplicativeSubgroup<F: PrimeField>(Vec<F>, F);
+pub struct MultiplicativeSubgroup<F: PrimeField>(Vec<F>, F);
 
 impl<F: PrimeField> Deref for MultiplicativeSubgroup<F> {
     type Target = Vec<F>;
@@ -204,6 +204,10 @@ impl<F: PrimeField> MultiplicativeSubgroup<F> {
     pub fn iter(&self) -> std::slice::Iter<F> {
         self.0.iter()
     }
+    
+    pub fn generator(&self) -> F {
+        self.1
+    }
 }
 
 impl<'a, F: PrimeField> IntoIterator for &'a MultiplicativeSubgroup<F> {
@@ -215,7 +219,7 @@ impl<'a, F: PrimeField> IntoIterator for &'a MultiplicativeSubgroup<F> {
     }
 }
 
-fn generate_multiplicative_subgroup<const N: u64, F: PrimeField>() -> MultiplicativeSubgroup<F> {
+pub fn generate_multiplicative_subgroup<const N: u64, F: PrimeField>() -> MultiplicativeSubgroup<F> {
     let subgroup_order = N;
     let field_multiplicative_order = F::zero() - F::one();
 

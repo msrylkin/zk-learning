@@ -101,6 +101,24 @@ pub struct CompiledCircuit<F: FftField + PrimeField> {
     public_inputs_count: usize,
 }
 
+pub struct Solution<F: FftField + PrimeField> {
+    pub a: DensePolynomial<F>,
+    pub b: DensePolynomial<F>,
+    pub c: DensePolynomial<F>,
+    pub ql: DensePolynomial<F>,
+    pub qr: DensePolynomial<F>,
+    pub qm: DensePolynomial<F>,
+    pub qo: DensePolynomial<F>,
+    pub qc: DensePolynomial<F>,
+    pub sid_1: DensePolynomial<F>,
+    pub sid_2: DensePolynomial<F>,
+    pub sid_3: DensePolynomial<F>,
+    pub s_sigma_1: DensePolynomial<F>,
+    pub s_sigma_2: DensePolynomial<F>,
+    pub s_sigma_3: DensePolynomial<F>,
+    pub pi: DensePolynomial<F>,
+}
+
 fn format_bool<F: Field>(b: bool) -> F {
     match b {
         true => F::one(),
@@ -263,6 +281,37 @@ impl<F: FftField + PrimeField> CompiledCircuit<F> {
 
         interpolate_univariate(&domain, &values)
     }
+    
+    pub fn get_solution(&self, domain: &[F], k1: F, k2: F) -> Solution<F> {
+        let (a, b, c) = self.get_abc_vectors();
+        let (a, b, c) = (
+            interpolate_univariate(domain, &a),
+            interpolate_univariate(domain, &b),
+            interpolate_univariate(domain, &c),
+        );
+        let (ql, qr, qm , qo, qc) = self.get_selectors(domain);
+        let (sid_1, sid_2, sid_3) = self.get_s_id_polys(domain, k1, k2);
+        let (s_sigma_1, s_sigma_2, s_sigma_3) = self.get_sigma_polys(domain, k1, k2);
+        let pi = self.get_public_input_poly(domain);
+        
+        Solution {
+            a,
+            b,
+            c,
+            ql,
+            qr,
+            qm,
+            qo,
+            qc,
+            sid_1,
+            sid_2,
+            sid_3,
+            s_sigma_1,
+            s_sigma_2,
+            s_sigma_3,
+            pi,
+        }
+    }
 }
 
 struct Circuit<F: FftField + PrimeField> {
@@ -273,7 +322,6 @@ impl<F: FftField + PrimeField> Circuit<F> {
 }
 
 pub fn get_test_circuit<F: FftField + PrimeField>() -> CompiledCircuit<F> {
-
     let circuit = CompiledCircuit {
         public_inputs_count: 2,
         sigma: vec![

@@ -3,7 +3,7 @@ use ark_ff::{FftField, Field, PrimeField};
 use ark_poly::univariate::DensePolynomial;
 use ark_std::iterable::Iterable;
 use ark_test_curves::bls12_381::Fr;
-use crate::plonk::prover::interpolate_univariate;
+use crate::poly_utils::interpolate_univariate;
 
 struct CircuitBuilder<F: FftField + PrimeField> {
     circuit: Circuit<F>,

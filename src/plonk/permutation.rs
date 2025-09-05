@@ -2,7 +2,7 @@ use ark_ff::{FftField, Field, PrimeField};
 use ark_poly::Polynomial;
 use ark_poly::univariate::DensePolynomial;
 use crate::plonk::circuit::{CompiledCircuit, Solution};
-use crate::plonk::prover::interpolate_univariate;
+use crate::poly_utils::interpolate_univariate;
 
 pub struct PermutationArgument<'a, F: PrimeField + FftField> {
     domain: &'a [F],
@@ -107,6 +107,19 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
             * self.hash_permutation(&self.solution.b, &perm_poly_2, point)
             * self.hash_permutation(&self.solution.c, &perm_poly_3, point)
     }
+
+    pub fn z_poly(&self) -> DensePolynomial<F> {
+        let values = (0..self.domain.len())
+            .map(|i| {
+                let num = self.numerator_acc(i);
+                let denom = self.denominator_acc(i);
+
+                num / denom
+            })
+            .collect::<Vec<_>>();
+
+        interpolate_univariate(self.domain, &values)
+    }
 }
 
 #[cfg(test)]
@@ -115,7 +128,7 @@ mod tests {
     use ark_test_curves::bls12_381::Fr;
     use crate::plonk::circuit::get_test_circuit;
     use crate::plonk::permutation::PermutationArgument;
-    use crate::plonk::prover::{interpolate_univariate, pick_coset_shifters};
+    use crate::plonk::prover::{pick_coset_shifters};
     use crate::poly_utils::generate_multiplicative_subgroup;
 
     #[test]

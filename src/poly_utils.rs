@@ -1,8 +1,9 @@
 use std::fmt::Debug;
 use std::ops::{Add, Deref};
-use ark_ff::{Field, PrimeField};
+use ark_ff::{FftField, Field, PrimeField};
 use ark_poly::{DenseMultilinearExtension, DenseUVPolynomial, MultilinearExtension, Polynomial};
 use ark_poly::univariate::{DensePolynomial, SparsePolynomial};
+use ark_std::Zero;
 
 pub fn get_reversed_vars_poly<F: Field>(poly: &DenseMultilinearExtension<F>) -> DenseMultilinearExtension<F> {
     let n = poly.num_vars();
@@ -204,7 +205,7 @@ impl<F: PrimeField> MultiplicativeSubgroup<F> {
     pub fn iter(&self) -> std::slice::Iter<F> {
         self.0.iter()
     }
-    
+
     pub fn generator(&self) -> F {
         self.1
     }
@@ -258,6 +259,103 @@ pub fn generate_multiplicative_subgroup<const N: u64, F: PrimeField>() -> Multip
 
 pub fn to_f<F: Field>(vals: Vec<i64>) -> Vec<F> {
     vals.into_iter().map(|e| F::from(e)).collect()
+}
+
+pub fn interpolate_univariate<F: Field>(domain: &[F], values : &[F]) -> DensePolynomial<F> {
+    assert!(domain.len() >= values.len());
+
+    generate_lagrange_basis_polys(&domain[0..values.len()])
+        .into_iter()
+        .zip(values)
+        .map(|(lp, y)| lp * *y)
+        .fold(DensePolynomial::zero(), |acc, lp| acc + lp)
+}
+
+fn symmetric_sums<F: Field>(values: &[F], max_k: usize) -> Vec<F> {
+    assert!(values.len() >= max_k);
+
+    let mut dp = vec![vec![F::zero(); max_k + 1]; values.len() + 1];
+
+    dp[0][0] = F::one();
+
+    for x in &mut dp {
+        x[0] = F::one();
+    }
+
+    for j in 1..dp.len() {
+        let x = values[j - 1];
+        for k in 1..max_k + 1 {
+            dp[j][k] = x * dp[j - 1][k - 1] + dp[j - 1][k];
+        }
+    }
+
+    dp.remove(dp.len() - 1)
+}
+
+pub fn generate_lagrange_basis_polys<F: Field>(domain: &[F]) -> Vec<DensePolynomial<F>> {
+    let mut lagrange_polys = vec![];
+
+    for (i, x_i) in domain.iter().enumerate() {
+        // calculate denominator
+        let mut full_denom = F::one();
+
+        for (j, x_j) in domain.iter().enumerate() {
+            if j != i {
+                full_denom *= (*x_i - *x_j).inverse().unwrap();
+            }
+        }
+
+        let remapped = domain.iter()
+            .enumerate()
+            .filter_map(|(j, e)| {
+                if i != j {
+                    Some(*e)
+                } else {
+                    None
+                }
+            }).collect::<Vec<_>>();
+
+        let sums = symmetric_sums(&remapped, remapped.len());
+
+        let mut res = vec![];
+        let mut sign = F::one();
+
+        for degree_index in 0..sums.len() {
+            res.push(full_denom * sums[degree_index] * sign);
+
+            sign *= F::from(-1);
+        }
+
+        res.reverse();
+
+        lagrange_polys.push(DensePolynomial::from_coefficients_vec(res));
+    }
+
+    lagrange_polys
+}
+
+pub fn split_poly<F: FftField + PrimeField>(poly: &DensePolynomial<F>, n: usize) -> (DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>) {
+    match poly.coeffs.split_at_checked(n) {
+        Some((lo, mid_hi)) => {
+            match mid_hi.split_at_checked(n) {
+                Some((mid, hi)) => (
+                    DensePolynomial::from_coefficients_slice(lo),
+                    DensePolynomial::from_coefficients_slice(mid),
+                    DensePolynomial::from_coefficients_slice(hi),
+                ),
+                None => (
+                    DensePolynomial::from_coefficients_slice(lo),
+                    DensePolynomial::from_coefficients_slice(mid_hi),
+                    DensePolynomial::zero(),
+                )
+            }
+        },
+        None => (
+            DensePolynomial::from_coefficients_slice(&poly.coeffs),
+            DensePolynomial::zero(),
+            DensePolynomial::zero(),
+        )
+    }
 }
 
 #[cfg(test)]
@@ -421,5 +519,93 @@ mod tests {
         }
 
         assert_eq!(poly.evaluate(&Fr::zero()) * Fr::from(SUBGROUP_ORDER), subgroup_evals_sum);
+    }
+
+    #[test]
+    fn test_symmetric_sums_4() {
+        let sums = symmetric_sums(&[
+            Fr::from(1),
+            Fr::from(2),
+            Fr::from(3),
+            Fr::from(4),
+        ], 4);
+
+        assert_eq!(sums, to_f::<Fr>(vec![1, 10, 35, 50, 24]));
+    }
+
+    #[test]
+    fn test_symmetric_sums_5() {
+        let sums = symmetric_sums(&[
+            Fr::from(1),
+            Fr::from(2),
+            Fr::from(3),
+            Fr::from(4),
+            Fr::from(5),
+        ], 5);
+
+        assert_eq!(sums, to_f::<Fr>(vec![1, 15, 85, 225, 274, 120]));
+    }
+
+    #[test]
+    fn test_interpolate_univariate() {
+        let values = to_f::<Fr>(vec![8,10,15]);
+        let domain = to_f::<Fr>(vec![1,2,3]);
+
+        let poly = interpolate_univariate(&domain, &values);
+
+        for (y, x) in values.into_iter().zip(domain) {
+            assert_eq!(poly.evaluate(&x), y);
+        }
+    }
+
+    #[test]
+    fn test_interpolate_univariate_mul_domain() {
+        let values = to_f::<Fr>(vec![8,10,15]);
+        let domain = generate_multiplicative_subgroup::<3, Fr>();
+
+        let poly = interpolate_univariate(&domain, &values);
+
+        for (y, x) in values.into_iter().zip(domain.into_iter()) {
+            assert_eq!(poly.evaluate(&x), y);
+        }
+    }
+
+    #[test]
+    fn split_poly_test() {
+        let poly = DensePolynomial::from_coefficients_vec(to_f::<Fr>(vec![
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+        ]));
+        let (lo, mid, hi) = split_poly(&poly, 4);
+
+        assert_eq!(
+            DensePolynomial::from_coefficients_vec(to_f::<Fr>(vec![1, 2, 3, 4])),
+            lo
+        );
+        assert_eq!(
+            DensePolynomial::from_coefficients_vec(to_f::<Fr>(vec![5, 6, 7, 8])),
+            mid
+        );
+        assert_eq!(
+            DensePolynomial::from_coefficients_vec(to_f::<Fr>(vec![9, 10])),
+            hi
+        );
+
+        let poly = DensePolynomial::from_coefficients_vec(to_f::<Fr>(vec![
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+        ]));
+        let (lo, mid, hi) = split_poly(&poly, 8);
+
+        assert_eq!(
+            DensePolynomial::from_coefficients_vec(to_f::<Fr>(vec![1, 2, 3, 4, 5, 6, 7, 8])),
+            lo
+        );
+        assert_eq!(
+            DensePolynomial::from_coefficients_vec(to_f::<Fr>(vec![9, 10])),
+            mid
+        );
+        assert_eq!(
+            DensePolynomial::zero(),
+            hi
+        );
     }
 }

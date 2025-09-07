@@ -21,6 +21,13 @@ struct KZG<P: Pairing> {
     config: Config<P>,
 }
 
+struct MultipointOpening<P: Pairing> {
+    batch_opening: BatchOpening<P>,
+    linearization_scalar: P::ScalarField,
+    opening_point: P::ScalarField,
+    commitments: Vec<P::G1>,
+}
+
 fn setup<P: Pairing>(n: usize, toxic_waste: P::ScalarField) -> Config<P> {
     Config {
         srs: (0..n).map(|i| P::G1::generator() * toxic_waste.pow([i as u64])).collect(),
@@ -86,21 +93,30 @@ impl<P: Pairing> KZG<P> {
     }
 
     pub fn linearize_elements(elements: &[P::ScalarField], linearization_scalar: &P::ScalarField) -> P::ScalarField {
-        elements
+        let res = elements
             .iter()
             .enumerate()
             .fold(P::ScalarField::zero(), |acc, (i, e)| {
                 acc + *e * linearization_scalar.pow([i as u64])
-            })
+            });
+
+        println!("linearized_evaluations {}", res);
+
+        res
     }
 
     pub fn linearize_commitments(elements: &[P::G1], linearization_scalar: &P::ScalarField) -> P::G1 {
-        elements
+        let res = elements
             .iter()
             .enumerate()
             .fold(P::G1::zero(), |acc, (i, e)| {
                 acc + *e * linearization_scalar.pow([i as u64])
-            })
+            });
+
+        println!("linearized_commitments {}", res.into_affine());
+
+        res
+
     }
 
     pub fn batch_open(
@@ -171,6 +187,28 @@ impl<P: Pairing> KZG<P> {
         )
     }
 
+    // fn check(
+    //     &self,
+    //     point: &P::ScalarField,
+    //     commitments: &[P::G1],
+    //     evaluations: &[P::ScalarField],
+    //     evaluation_proof: &P::G1,
+    //     linearization_scalar: &P::ScalarField,
+    // ) -> bool {
+    //     let linearized_commitments = Self::linearize_commitments(commitments, linearization_scalar);
+    //     let linearized_evaluations = Self::linearize_elements(evaluations, linearization_scalar);
+    //
+    //     P::pairing(
+    //         // linearized_commitments - P::G1::generator() * linearized_evaluations,
+    //         linearized_commitments - P::G1::generator() * linearized_evaluations + *evaluation_proof * point,
+    //         P::G2::generator(),
+    //     ) == P::pairing(
+    //         evaluation_proof,
+    //         // self.config.verifier_key - P::G2::generator() * point,
+    //         self.config.verifier_key,
+    //     )
+    // }
+
     fn check(
         &self,
         point: &P::ScalarField,
@@ -182,51 +220,105 @@ impl<P: Pairing> KZG<P> {
         let linearized_commitments = Self::linearize_commitments(commitments, linearization_scalar);
         let linearized_evaluations = Self::linearize_elements(evaluations, linearization_scalar);
 
+        println!("old l1 {}", (linearized_commitments - P::G1::generator() * linearized_evaluations + *evaluation_proof * point).into_affine());
+        println!("old l2 {}", (evaluation_proof).into_affine());
+
         P::pairing(
-            linearized_commitments - P::G1::generator() * linearized_evaluations,
+            // linearized_commitments - P::G1::generator() * linearized_evaluations,
+            linearized_commitments - P::G1::generator() * linearized_evaluations + *evaluation_proof * point,
             P::G2::generator(),
         ) == P::pairing(
             evaluation_proof,
-            self.config.verifier_key - P::G2::generator() * point,
+            // self.config.verifier_key - P::G2::generator() * point,
+            self.config.verifier_key,
+        )
+    }
+
+    fn linearized_comm_evals_diff(
+        commitments: &[P::G1],
+        evaluations: &[P::ScalarField],
+        linearization_scalar: &P::ScalarField,
+    ) -> P::G1 {
+        let linearized_commitments = Self::linearize_commitments(commitments, linearization_scalar);
+        let linearized_evaluations = Self::linearize_elements(evaluations, linearization_scalar);
+
+        linearized_commitments - P::G1::generator() * linearized_evaluations
+    }
+
+    fn check_multipoint(
+        &self,
+        // commitments: &[P::G1],
+        multipoint_openings: &[MultipointOpening<P>],
+        multipoint_linearization_scalar: &P::ScalarField,
+    ) -> bool {
+        let (l1_pair, l2_pair) = multipoint_openings
+            .iter()
+            .enumerate()
+            .fold((P::G1::zero(), P::G1::zero()), |(l1_pair, l2_pair), (i, opening) | {
+                let diff = Self::linearized_comm_evals_diff(
+                    &opening.commitments,
+                    &opening.batch_opening.evaluations,
+                    &opening.linearization_scalar,
+                );
+
+                let scale = multipoint_linearization_scalar.pow([i as u64]);
+
+                (
+                    l1_pair + diff * scale + opening.batch_opening.evaluation_proof * opening.opening_point * scale,
+                    l2_pair + opening.batch_opening.evaluation_proof * scale,
+                )
+            });
+
+        println!("l1 pair {}", l1_pair.into_affine());
+        println!("l2 pair {}", l2_pair.into_affine());
+
+        P::pairing(
+            l1_pair,
+            P::G2::generator(),
+        ) == P::pairing(
+            l2_pair,
+            self.config.verifier_key,
         )
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Mul;
     use ark_ec::{CurveGroup, PrimeGroup};
     use ark_ec::pairing::Pairing;
     use ark_ff::Field;
     use ark_poly::{DenseUVPolynomial, Polynomial};
     use ark_poly::univariate::DensePolynomial;
-    use ark_std::{One, Zero};
-    use ark_test_curves::bls12_381::{Bls12_381, Fr, G1Projective as G1, G2Projective as G2};
-    use crate::kzg::{setup, BatchOpening, KZG};
+    use ark_test_curves::bls12_381::{Bls12_381, Fr, G1Projective as G1,};
+    use crate::kzg::{setup, BatchOpening, MultipointOpening, KZG};
     use crate::poly_utils::to_f;
 
     struct TestData {
         kzg: KZG<Bls12_381>,
         tau: Fr,
-        linearization_scalar: Fr,
-        opening_point: Fr,
     }
 
     fn test_setup() -> TestData {
-        let linearization_scalar = Fr::from(133);
         let tau = Fr::from(333444555);
-        let config = setup::<Bls12_381>(11, tau);
+        let config = setup::<Bls12_381>(30, tau);
         let kzg = KZG::<Bls12_381>::new(config);
-        let opening_point = Fr::from(123);
 
         TestData {
             kzg,
             tau,
-            linearization_scalar,
-            opening_point
         }
     }
 
-    fn test_polys() -> (DensePolynomial<Fr>, DensePolynomial<Fr>, DensePolynomial<Fr>) {
+    fn scalars(i: usize) -> (Fr, Fr) {
+        let ii = Fr::from(i as u64);
+        let linearization_scalar = (Fr::from(133) * ii + ii).pow([i as u64]);
+        let opening_point = (Fr::from(123) * ii + ii).pow([i as u64]);
+
+        (linearization_scalar, opening_point)
+    }
+
+    fn test_polys() -> (DensePolynomial<Fr>, DensePolynomial<Fr>, DensePolynomial<Fr>, DensePolynomial<Fr>, DensePolynomial<Fr>) {
         let poly_1 = DensePolynomial::from_coefficients_vec(
             to_f::<Fr>(vec![2, 3, 4, 5, 6, 7, 8, 9, 10, 11]),
         );
@@ -236,14 +328,18 @@ mod tests {
         let poly_3 = DensePolynomial::from_coefficients_vec(
             to_f::<Fr>(vec![22, 33, 44, 55, 66, 77, 88, 99, 1000, 1231]),
         );
+        let poly_4 = DensePolynomial::from_coefficients_vec(
+            to_f::<Fr>(vec![222, 333, 444, 5555, 6676, 717, 88, 9129, 101100, 1231231]),
+        );
+        let poly_5 = poly_4.clone() * poly_3.clone() * Fr::from(33) + DensePolynomial::from_coefficients_slice(&[Fr::from(4455)]);
 
-        (poly_1, poly_2, poly_3)
+        (poly_1, poly_2, poly_3, poly_4, poly_5)
     }
 
     #[test]
     pub fn test_commitment() {
         let TestData { kzg, tau, .. } = test_setup();
-        let (poly, _, _) = test_polys();
+        let (poly, ..) = test_polys();
 
         let comm = kzg.commit(&poly);
 
@@ -252,8 +348,9 @@ mod tests {
 
     #[test]
     pub fn test_batch_commitment() {
-        let TestData { kzg, tau, linearization_scalar, .. } = test_setup();
-        let (poly_1, poly_2, poly_3) = test_polys();
+        let TestData { kzg, tau, .. } = test_setup();
+        let (linearization_scalar, .. ) = scalars(1);
+        let (poly_1, poly_2, poly_3, ..) = test_polys();
 
         let comm_1 = kzg.commit(&poly_1);
         let comm_2 = kzg.commit(&poly_2);
@@ -271,7 +368,9 @@ mod tests {
 
     #[test]
     pub fn test_open() {
-        let TestData { kzg, tau, opening_point, .. } = test_setup();
+        let TestData { kzg, tau, .. } = test_setup();
+        let (_, opening_point ) = scalars(1);
+
         let (poly, ..) = test_polys();
 
         let opening = kzg.open(&poly, &opening_point);
@@ -288,8 +387,9 @@ mod tests {
 
     #[test]
     pub fn test_batch_open() {
-        let TestData { kzg, tau, linearization_scalar, opening_point } = test_setup();
-        let (poly_1, poly_2, poly_3) = test_polys();
+        let TestData { kzg, tau, .. } = test_setup();
+        let (linearization_scalar, opening_point ) = scalars(1);
+        let (poly_1, poly_2, poly_3, ..) = test_polys();
 
         let opening = kzg.batch_open(
             &[&poly_1, &poly_2, &poly_3],
@@ -318,7 +418,7 @@ mod tests {
     #[test]
     pub fn test_kzg_single_open() {
         let TestData { kzg, .. } = test_setup();
-        let (poly, _, _) = test_polys();
+        let (poly, ..) = test_polys();
         let commitment = kzg.commit(&poly);
         let point = Fr::from(123);
         let opening = kzg.open(&poly, &point);
@@ -334,8 +434,10 @@ mod tests {
 
     #[test]
     pub fn test_kzg_batch_open() {
-        let TestData { kzg, linearization_scalar, opening_point, .. } = test_setup();
-        let (poly_1, poly_2, poly_3) = test_polys();
+        let TestData { kzg, .. } = test_setup();
+        let (linearization_scalar, opening_point ) = scalars(1);
+
+        let (poly_1, poly_2, poly_3, ..) = test_polys();
         let commitment_1 = kzg.commit(&poly_1);
         let commitment_2 = kzg.commit(&poly_2);
         let commitment_3 = kzg.commit(&poly_3);
@@ -351,6 +453,64 @@ mod tests {
             &[commitment_1, commitment_2, commitment_3],
             &openings,
             &linearization_scalar
+        );
+
+        assert!(is_valid);
+    }
+
+    #[test]
+    pub fn test_kzg_batch_open_multipoint() {
+        let TestData { kzg, .. } = test_setup();
+        let (linearization_scalar_1, opening_point_1 ) = scalars(1);
+        let (linearization_scalar_2, opening_point_2 ) = scalars(2);
+
+        let (poly_1, poly_2, poly_3, poly_4, poly_5) = test_polys();
+
+        let commitment_1 = kzg.commit(&poly_1);
+        let commitment_2 = kzg.commit(&poly_2);
+        let commitment_3 = kzg.commit(&poly_3);
+        let commitment_4 = kzg.commit(&poly_4);
+        let commitment_5 = kzg.commit(&poly_5);
+
+        let openings_1 = kzg.batch_open(
+            &[&poly_1, &poly_2, &poly_3],
+            &opening_point_1,
+            &linearization_scalar_1,
+        );
+        let openings_2 = kzg.batch_open(
+            &[&poly_4, &poly_5,],
+            &opening_point_2,
+            &linearization_scalar_2,
+        );
+
+        let old_is_valid = kzg.check(
+            &opening_point_1,
+            &[commitment_1, commitment_2, commitment_3],
+            &openings_1.evaluations,
+            &openings_1.evaluation_proof,
+            &linearization_scalar_1,
+        );
+
+        assert!(old_is_valid);
+
+        println!("\n================\n");
+
+        let is_valid = kzg.check_multipoint(
+            &[
+                MultipointOpening {
+                    batch_opening: openings_1,
+                    linearization_scalar: linearization_scalar_1,
+                    opening_point: opening_point_1,
+                    commitments: vec![commitment_1, commitment_2, commitment_3]
+                },
+                MultipointOpening {
+                    batch_opening: openings_2,
+                    linearization_scalar: linearization_scalar_2,
+                    opening_point: opening_point_2,
+                    commitments: vec![commitment_4, commitment_5]
+                }
+            ],
+            &Fr::from(777),
         );
 
         assert!(is_valid);

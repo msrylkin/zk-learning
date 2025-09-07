@@ -21,11 +21,11 @@ struct KZG<P: Pairing> {
     config: Config<P>,
 }
 
-struct MultipointOpening<P: Pairing> {
-    batch_opening: BatchOpening<P>,
-    linearization_scalar: P::ScalarField,
-    opening_point: P::ScalarField,
-    commitments: Vec<P::G1>,
+struct MultipointOpening<'a, P: Pairing> {
+    batch_opening: &'a BatchOpening<P>,
+    linearization_scalar: &'a P::ScalarField,
+    opening_point: &'a P::ScalarField,
+    commitments: &'a [P::G1],
 }
 
 fn setup<P: Pairing>(n: usize, toxic_waste: P::ScalarField) -> Config<P> {
@@ -72,6 +72,15 @@ impl<P: Pairing> From<Opening<P>> for BatchOpening<P> {
     }
 }
 
+impl<P: Pairing> From<&Opening<P>> for BatchOpening<P> {
+    fn from(opening: &Opening<P>) -> Self {
+        Self {
+            evaluations: vec![opening.evaluation],
+            evaluation_proof: opening.evaluation_proof,
+        }
+    }
+}
+
 impl<P: Pairing> KZG<P> {
     pub fn new(config: Config<P>) -> Self {
         Self { config }
@@ -93,30 +102,21 @@ impl<P: Pairing> KZG<P> {
     }
 
     pub fn linearize_elements(elements: &[P::ScalarField], linearization_scalar: &P::ScalarField) -> P::ScalarField {
-        let res = elements
+        elements
             .iter()
             .enumerate()
             .fold(P::ScalarField::zero(), |acc, (i, e)| {
                 acc + *e * linearization_scalar.pow([i as u64])
-            });
-
-        println!("linearized_evaluations {}", res);
-
-        res
+            })
     }
 
     pub fn linearize_commitments(elements: &[P::G1], linearization_scalar: &P::ScalarField) -> P::G1 {
-        let res = elements
+        elements
             .iter()
             .enumerate()
             .fold(P::G1::zero(), |acc, (i, e)| {
                 acc + *e * linearization_scalar.pow([i as u64])
-            });
-
-        println!("linearized_commitments {}", res.into_affine());
-
-        res
-
+            })
     }
 
     pub fn batch_open(
@@ -162,11 +162,15 @@ impl<P: Pairing> KZG<P> {
         commitment: &P::G1,
         opening: &Opening<P>,
     ) -> bool {
-        self.check(
-            point,
-            &[*commitment],
-            &[opening.evaluation],
-            &opening.evaluation_proof,
+        self.check_multipoint(
+            &[
+                MultipointOpening {
+                    batch_opening: &BatchOpening::from(opening),
+                    linearization_scalar: &P::ScalarField::one(),
+                    opening_point: point,
+                    commitments: &[*commitment],
+                }
+            ],
             &P::ScalarField::one(),
         )
     }
@@ -178,59 +182,16 @@ impl<P: Pairing> KZG<P> {
         openings: &BatchOpening<P>,
         linearization_scalar: &P::ScalarField,
     ) -> bool {
-        self.check(
-            point,
-            commitments,
-            &openings.evaluations,
-            &openings.evaluation_proof,
-            linearization_scalar,
-        )
-    }
-
-    // fn check(
-    //     &self,
-    //     point: &P::ScalarField,
-    //     commitments: &[P::G1],
-    //     evaluations: &[P::ScalarField],
-    //     evaluation_proof: &P::G1,
-    //     linearization_scalar: &P::ScalarField,
-    // ) -> bool {
-    //     let linearized_commitments = Self::linearize_commitments(commitments, linearization_scalar);
-    //     let linearized_evaluations = Self::linearize_elements(evaluations, linearization_scalar);
-    //
-    //     P::pairing(
-    //         // linearized_commitments - P::G1::generator() * linearized_evaluations,
-    //         linearized_commitments - P::G1::generator() * linearized_evaluations + *evaluation_proof * point,
-    //         P::G2::generator(),
-    //     ) == P::pairing(
-    //         evaluation_proof,
-    //         // self.config.verifier_key - P::G2::generator() * point,
-    //         self.config.verifier_key,
-    //     )
-    // }
-
-    fn check(
-        &self,
-        point: &P::ScalarField,
-        commitments: &[P::G1],
-        evaluations: &[P::ScalarField],
-        evaluation_proof: &P::G1,
-        linearization_scalar: &P::ScalarField,
-    ) -> bool {
-        let linearized_commitments = Self::linearize_commitments(commitments, linearization_scalar);
-        let linearized_evaluations = Self::linearize_elements(evaluations, linearization_scalar);
-
-        println!("old l1 {}", (linearized_commitments - P::G1::generator() * linearized_evaluations + *evaluation_proof * point).into_affine());
-        println!("old l2 {}", (evaluation_proof).into_affine());
-
-        P::pairing(
-            // linearized_commitments - P::G1::generator() * linearized_evaluations,
-            linearized_commitments - P::G1::generator() * linearized_evaluations + *evaluation_proof * point,
-            P::G2::generator(),
-        ) == P::pairing(
-            evaluation_proof,
-            // self.config.verifier_key - P::G2::generator() * point,
-            self.config.verifier_key,
+        self.check_multipoint(
+            &[
+                MultipointOpening {
+                    batch_opening: openings,
+                    linearization_scalar,
+                    opening_point: point,
+                    commitments,
+                }
+            ],
+            &P::ScalarField::one(),
         )
     }
 
@@ -256,7 +217,7 @@ impl<P: Pairing> KZG<P> {
             .enumerate()
             .fold((P::G1::zero(), P::G1::zero()), |(l1_pair, l2_pair), (i, opening) | {
                 let diff = Self::linearized_comm_evals_diff(
-                    &opening.commitments,
+                    opening.commitments,
                     &opening.batch_opening.evaluations,
                     &opening.linearization_scalar,
                 );
@@ -268,9 +229,6 @@ impl<P: Pairing> KZG<P> {
                     l2_pair + opening.batch_opening.evaluation_proof * scale,
                 )
             });
-
-        println!("l1 pair {}", l1_pair.into_affine());
-        println!("l2 pair {}", l2_pair.into_affine());
 
         P::pairing(
             l1_pair,
@@ -483,31 +441,19 @@ mod tests {
             &linearization_scalar_2,
         );
 
-        let old_is_valid = kzg.check(
-            &opening_point_1,
-            &[commitment_1, commitment_2, commitment_3],
-            &openings_1.evaluations,
-            &openings_1.evaluation_proof,
-            &linearization_scalar_1,
-        );
-
-        assert!(old_is_valid);
-
-        println!("\n================\n");
-
         let is_valid = kzg.check_multipoint(
             &[
                 MultipointOpening {
-                    batch_opening: openings_1,
-                    linearization_scalar: linearization_scalar_1,
-                    opening_point: opening_point_1,
-                    commitments: vec![commitment_1, commitment_2, commitment_3]
+                    batch_opening: &openings_1,
+                    linearization_scalar: &linearization_scalar_1,
+                    opening_point: &opening_point_1,
+                    commitments: &[commitment_1, commitment_2, commitment_3]
                 },
                 MultipointOpening {
-                    batch_opening: openings_2,
-                    linearization_scalar: linearization_scalar_2,
-                    opening_point: opening_point_2,
-                    commitments: vec![commitment_4, commitment_5]
+                    batch_opening: &openings_2,
+                    linearization_scalar: &linearization_scalar_2,
+                    opening_point: &opening_point_2,
+                    commitments: &[commitment_4, commitment_5]
                 }
             ],
             &Fr::from(777),

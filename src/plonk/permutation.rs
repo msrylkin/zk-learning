@@ -21,13 +21,27 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
         }
     }
 
-    fn hash_permutation(
+    pub fn hash_permutation(
         &self,
         f: &DensePolynomial<F>,
         perm_poly: &DensePolynomial<F>,
         point: &F,
     ) -> F {
         f.evaluate(&point) + *self.beta * perm_poly.evaluate(&point) + *self.gamma
+    }
+
+    pub fn hash_permutation_poly(
+        &self,
+        f: &DensePolynomial<F>,
+        perm_poly: &DensePolynomial<F>,
+    ) -> DensePolynomial<F> {
+        let mut values = vec![];
+
+        for w in self.domain {
+            values.push(self.hash_permutation(f, perm_poly, w));
+        }
+
+        interpolate_univariate(self.domain, &values)
     }
 
     pub fn numerator_acc(
@@ -68,7 +82,7 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
             .product()
     }
 
-    pub fn denominator_poly(
+    pub fn denominator_poly_old(
         &self,
     ) -> DensePolynomial<F> {
         let values = self.domain.iter().map(|w| {
@@ -81,6 +95,12 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
         }).collect::<Vec<_>>();
 
         interpolate_univariate(self.domain, &values)
+    }
+
+    pub fn denominator_poly(&self) -> DensePolynomial<F> {
+        self.hash_permutation_poly(&self.solution.a, &self.solution.s_sigma_1)
+            * self.hash_permutation_poly(&self.solution.b, &self.solution.s_sigma_2)
+            * self.hash_permutation_poly(&self.solution.c, &self.solution.s_sigma_3)
     }
 
     pub fn numerator_poly(&self) -> DensePolynomial<F> {
@@ -96,7 +116,7 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
         interpolate_univariate(self.domain, &values)
     }
 
-    fn permutation_product(
+    pub fn permutation_product(
         &self,
         perm_poly_1: &DensePolynomial<F>,
         perm_poly_2: &DensePolynomial<F>,
@@ -120,16 +140,26 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
 
         interpolate_univariate(self.domain, &values)
     }
+
+    pub fn beta(&self) -> F {
+        self.beta.clone()
+    }
+
+    pub fn gamma(&self) -> F {
+        self.gamma.clone()
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use ark_poly::Polynomial;
+    use ark_poly::univariate::DensePolynomial;
     use ark_std::One;
     use ark_test_curves::bls12_381::Fr;
     use crate::plonk::circuit::get_test_circuit;
     use crate::plonk::permutation::PermutationArgument;
     use crate::plonk::prover::{pick_coset_shifters};
-    use crate::poly_utils::generate_multiplicative_subgroup;
+    use crate::poly_utils::{generate_multiplicative_subgroup, interpolate_univariate};
 
     #[test]
     fn test_permutation_poly_acc() {
@@ -151,5 +181,68 @@ mod tests {
         );
 
         assert_eq!(num / denom, Fr::one());
+    }
+
+    #[test]
+    fn test_hash_permutation_poly() {
+        let test_circuit = get_test_circuit();
+        let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
+        let Zh = domain.get_vanishing_polynomial();
+        let Zh = DensePolynomial::from(Zh);
+        let (k1, k2) = pick_coset_shifters(&domain);
+
+        let beta = Fr::from(43);
+        let gamma = Fr::from(35);
+
+        let solution = test_circuit.get_solution(&domain, k1, k2);
+        let permutation = PermutationArgument::new(&domain, &beta, &gamma, &solution);
+
+        let num_poly = permutation.numerator_poly();
+        let denom_poly = permutation.denominator_poly();
+
+        let custom_num_poly = permutation.hash_permutation_poly(&solution.a, &solution.sid_1)
+            * permutation.hash_permutation_poly(&solution.b, &solution.sid_2)
+            * permutation.hash_permutation_poly(&solution.c, &solution.sid_3);
+
+        let mut reduced_num_values = vec![];
+        for w in &domain {
+            reduced_num_values.push(custom_num_poly.evaluate(&w));
+        }
+        let reduced_num_poly = interpolate_univariate(&domain, &reduced_num_values);
+
+        let custom_denom_poly = permutation.hash_permutation_poly(&solution.a, &solution.s_sigma_1)
+            * permutation.hash_permutation_poly(&solution.b, &solution.s_sigma_2)
+            * permutation.hash_permutation_poly(&solution.c, &solution.s_sigma_3);
+
+        let mut reduced_denom_values = vec![];
+        for w in &domain {
+            reduced_denom_values.push(custom_denom_poly.evaluate(&w));
+        }
+        let reduced_denom_poly = interpolate_univariate(&domain, &reduced_denom_values);
+
+        for w in &domain {
+            assert_eq!(num_poly.evaluate(&w), reduced_num_poly.evaluate(&w));
+            assert_eq!(num_poly.evaluate(&w), custom_num_poly.evaluate(&w));
+            assert_eq!(denom_poly.evaluate(&w), reduced_denom_poly.evaluate(&w));
+            assert_eq!(denom_poly.evaluate(&w), custom_denom_poly.evaluate(&w));
+        }
+
+        assert_eq!(
+            num_poly,
+            reduced_num_poly,
+        );
+        assert_ne!(
+            num_poly,
+            custom_num_poly,
+        );
+
+        assert_eq!(
+            denom_poly,
+            custom_denom_poly,
+        );
+        assert_ne!(
+            denom_poly,
+            reduced_denom_poly,
+        );
     }
 }

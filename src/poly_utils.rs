@@ -1,8 +1,9 @@
 use std::fmt::Debug;
 use std::ops::{Add, Deref};
 use ark_ff::{FftField, Field, PrimeField};
-use ark_poly::{DenseMultilinearExtension, DenseUVPolynomial, MultilinearExtension, Polynomial};
+use ark_poly::{DenseMultilinearExtension, DenseUVPolynomial, EvaluationDomain, MultilinearExtension, Polynomial, Radix2EvaluationDomain};
 use ark_poly::univariate::{DensePolynomial, SparsePolynomial};
+use ark_std::iterable::Iterable;
 use ark_std::Zero;
 
 pub fn get_reversed_vars_poly<F: Field>(poly: &DenseMultilinearExtension<F>) -> DenseMultilinearExtension<F> {
@@ -262,12 +263,28 @@ pub fn to_f<F: Field>(vals: Vec<i64>) -> Vec<F> {
 }
 
 pub fn interpolate_univariate<F: Field>(domain: &[F], values : &[F]) -> DensePolynomial<F> {
-    assert!(domain.len() >= values.len());
+    assert!(domain.len() <= values.len());
+    assert_eq!(domain.len(), values.len());
 
-    generate_lagrange_basis_polys(&domain[0..values.len()])
+    let mut padded_values = vec![];
+
+    for i in 0..domain.len() {
+        if i < values.len() {
+            padded_values.push(values[i]);
+        } else {
+            // padded_values.push(F::zero());
+        }
+    }
+
+    assert_eq!(domain.len(), padded_values.len());
+
+    // let domain_lib = Radix2EvaluationDomain::new(domain.len());
+
+    // generate_lagrange_basis_polys(&domain[0..values.len()])
+    generate_lagrange_basis_polys(domain)
         .into_iter()
-        .zip(values)
-        .map(|(lp, y)| lp * *y)
+        .zip(padded_values)
+        .map(|(lp, y)| lp * y)
         .fold(DensePolynomial::zero(), |acc, lp| acc + lp)
 }
 

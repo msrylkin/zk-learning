@@ -5,19 +5,15 @@ use ark_std::{UniformRand, Zero};
 use ark_test_curves::bls12_381::{Bls12_381, Fr, G1Affine as G1, G2Affine as G2};
 use ark_ff::{FftField, One, PrimeField};
 use ark_poly::univariate::{DensePolynomial};
-use ark_ec::short_weierstrass::{Affine};
 use ark_ff::Field;
 use ark_poly::{DenseUVPolynomial, Polynomial};
-use ark_std::iterable::Iterable;
-use ark_test_curves::bls12_381::g1::Config as G1Config;
-use ark_test_curves::bls12_381::g2::Config as G2Config;
 
-struct Config<P: Pairing> {
+pub struct Config<P: Pairing> {
     srs: Vec<P::G1>,
     verifier_key: P::G2,
 }
 
-struct KZG<P: Pairing> {
+pub struct KZG<P: Pairing> {
     config: Config<P>,
 }
 
@@ -28,7 +24,7 @@ struct MultipointOpening<'a, P: Pairing> {
     commitments: &'a [P::G1],
 }
 
-fn setup<P: Pairing>(n: usize, toxic_waste: P::ScalarField) -> Config<P> {
+pub fn setup<P: Pairing>(n: usize, toxic_waste: P::ScalarField) -> Config<P> {
     Config {
         srs: (0..n).map(|i| P::G1::generator() * toxic_waste.pow([i as u64])).collect(),
         verifier_key: P::G2::generator() * toxic_waste,

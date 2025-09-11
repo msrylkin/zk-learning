@@ -29,15 +29,32 @@ fn prove<F: PrimeField + FftField>(
 
     let z_shifted = shift_poly(&z_poly, &omega);
 
-    let alpha = F::from(123);
-
+    let alpha = generate_alpha();
 
     let big_t = compute_big_quotient(&solution, &z_poly, &z_shifted, &permutation_argument, &Zh, lagrange_1, &alpha);
 
     let (lo_t, mid_t, hi_t) = split_poly(&big_t, domain.len());
     let (lo_t, mid_t, hi_t) = blind_splitted_t(&lo_t, &mid_t, &hi_t, domain.len());
 
-    let openings = compute_openings(&solution, &z_poly);
+    let zeta = generate_zeta();
+
+    let openings = compute_openings(&solution, &z_poly, &zeta);
+
+    let r_poly = linearization_poly(
+        &openings,
+        &solution,
+        &permutation_argument,
+        &z_poly,
+        &DensePolynomial::from(Zh),
+        lagrange_1,
+        &zeta,
+        &alpha,
+        &lo_t,
+        &mid_t,
+        &hi_t,
+        domain.len(),
+        &domain,
+    );
 }
 
 fn compute_gate_check_poly<F: PrimeField + FftField>(solution: &Solution<F>) -> DensePolynomial<F> {
@@ -48,9 +65,20 @@ fn compute_gate_check_poly<F: PrimeField + FftField>(solution: &Solution<F>) -> 
         + &solution.pi + &solution.qc
 }
 
-
 pub fn generate_beta_gamma<F: FftField + PrimeField>() -> (F, F) {
     (F::from(43), F::from(35))
+}
+
+pub fn generate_alpha<F: FftField + PrimeField>() -> F {
+    F::from(4004)
+}
+
+pub fn generate_vi<F: FftField + PrimeField>() -> F {
+    F::from(4234)
+}
+
+pub fn generate_zeta<F: FftField + PrimeField>() -> F {
+    F::from(776655)
 }
 
 
@@ -110,6 +138,7 @@ fn compute_big_quotient<F: FftField + PrimeField>(
 
     let perm_numerator_poly = perm_argument.numerator_poly() * z;
     let perm_denominator_poly = perm_argument.denominator_poly() * z_shifted;
+
     let z_poly_m1 = (z - DensePolynomial::from_coefficients_slice(&[F::one()])) * lagrange_base_1;
 
     divide_by_vanishing(&gate_check_poly, Zh)
@@ -120,21 +149,67 @@ fn compute_big_quotient<F: FftField + PrimeField>(
 fn compute_openings<F: FftField + PrimeField>(
     solution: &Solution<F>,
     z_shifted: &DensePolynomial<F>,
+    zeta: &F,
 ) -> Openings<F> {
-    let zeta = F::from(776655);
-
     Openings {
-        a: solution.a.evaluate(&zeta),
-        b: solution.b.evaluate(&zeta),
-        c: solution.c.evaluate(&zeta),
-        s_sigma_1: solution.s_sigma_1.evaluate(&zeta),
-        s_sigma_2: solution.s_sigma_2.evaluate(&zeta),
-        z_shifted: z_shifted.evaluate(&zeta),
+        a: solution.a.evaluate(zeta),
+        b: solution.b.evaluate(zeta),
+        c: solution.c.evaluate(zeta),
+        s_sigma_1: solution.s_sigma_1.evaluate(zeta),
+        s_sigma_2: solution.s_sigma_2.evaluate(zeta),
+        z_shifted: z_shifted.evaluate(zeta),
     }
 }
 
-fn linearization_poly<F: FftField + PrimeField>(openings: &Openings<F>) {
+fn linearization_poly<F: FftField + PrimeField>(
+    openings: &Openings<F>,
+    solution: &Solution<F>,
+    permutation_argument: &PermutationArgument<F>,
+    z_poly: &DensePolynomial<F>,
+    Zh: &DensePolynomial<F>,
+    lagrange_1: &DensePolynomial<F>,
+    zeta: &F,
+    alpha: &F,
+    t_lo: &DensePolynomial<F>,
+    t_mid: &DensePolynomial<F>,
+    t_hi: &DensePolynomial<F>,
+    n: usize,
+    domain: &[F],
+) -> DensePolynomial<F> {
+    let gate_check_poly_linearized = &solution.qm * openings.a * openings.b
+        + &solution.ql * openings.a
+        + &solution.qr * openings.b
+        + &solution.qo * openings.c
+        + const_poly(solution.pi.evaluate(&zeta)) + &solution.qc;
 
+    let perm_numerator_poly_linearized = z_poly * permutation_argument.numerator_poly().evaluate(&zeta);
+
+    let sigma_a_linearized = openings.a + permutation_argument.beta() * openings.s_sigma_1 + permutation_argument.gamma();
+    let sigma_b_linearized = openings.b + permutation_argument.beta() * openings.s_sigma_2 + permutation_argument.gamma();
+    let sigma_c_lin_poly = const_poly(openings.c)
+        + &solution.s_sigma_3 * permutation_argument.beta()
+        + const_poly(permutation_argument.gamma());
+    let perm_denominator_poly_linearized = sigma_c_lin_poly * sigma_a_linearized * sigma_b_linearized * openings.z_shifted;
+
+    let perm_start_linearized = (z_poly - const_poly(F::one())) * lagrange_1.evaluate(zeta);
+
+    let linearized_vanishing_t = (
+        t_lo
+        + t_mid * zeta.pow([n as u64])
+        + t_hi * zeta.pow([n as u64 * 2])
+    ) * Zh.evaluate(zeta);
+
+    let r_poly = gate_check_poly_linearized
+        + perm_numerator_poly_linearized * *alpha
+        - perm_denominator_poly_linearized * *alpha
+        + perm_start_linearized * alpha.square()
+        - linearized_vanishing_t;
+
+    r_poly
+}
+
+fn const_poly<F: Field>(c: F) -> DensePolynomial<F> {
+    DensePolynomial::from_coefficients_slice(&[c])
 }
 
 #[cfg(test)]
@@ -142,12 +217,13 @@ mod tests {
     use ark_ff::Field;
     use ark_poly::{DenseUVPolynomial, Polynomial};
     use ark_poly::univariate::DensePolynomial;
-    use ark_std::One;
+    use ark_std::{One, Zero};
     use ark_test_curves::bls12_381::Fr;
+    use crate::kzg::{setup, KZG};
     use crate::plonk::blinder::blind_splitted_t;
     use crate::plonk::circuit::get_test_circuit;
     use crate::plonk::permutation::PermutationArgument;
-    use crate::plonk::prover::{compute_big_quotient, compute_gate_check_poly, interpolate_univariate, pick_coset_shifters, shift_poly};
+    use crate::plonk::prover::{compute_big_quotient, compute_gate_check_poly, compute_openings, interpolate_univariate, linearization_poly, pick_coset_shifters, shift_poly};
     use crate::poly_utils::{generate_lagrange_basis_polys, generate_multiplicative_subgroup, split_poly, to_f};
 
     #[test]
@@ -220,7 +296,6 @@ mod tests {
         let z_shifted = shift_poly(&z, &domain.generator());
         let alpha = Fr::from(123);
 
-
         let big_q = compute_big_quotient(
             &solution,
             &z,
@@ -264,5 +339,55 @@ mod tests {
                 lo.evaluate(&w) + w.pow([4]) * mid.evaluate(&w) + w.pow([8]) * hi.evaluate(&w),
             );
         }
+    }
+
+    #[test]
+    fn test_linearization_poly() {
+        let test_circuit = get_test_circuit();
+        let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
+        let omega = domain.generator();
+        let Zh = domain.get_vanishing_polynomial();
+        let (k1, k2) = pick_coset_shifters(&domain);
+        let beta = Fr::from(43);
+        let gamma = Fr::from(35);
+
+        let solution = test_circuit.get_solution(&domain, k1, k2);
+        let perm_argument = PermutationArgument::new(&domain, &beta, &gamma, &solution);
+        let z = perm_argument.z_poly();
+        let z_shifted = shift_poly(&z, &domain.generator());
+        let alpha = Fr::from(123);
+        let zeta = Fr::from(999);
+
+        let lagrange_base_1 = &generate_lagrange_basis_polys(&domain)[0];
+
+        let big_q = compute_big_quotient(
+            &solution,
+            &z,
+            &z_shifted,
+            &perm_argument,
+            &Zh,
+            &lagrange_base_1,
+            &alpha,
+        );
+        let (lo, mid, hi) = split_poly(&big_q, domain.len());
+
+        let openings = compute_openings(&solution, &z_shifted, &zeta);
+        let r_poly = linearization_poly(
+            &openings,
+            &solution,
+            &perm_argument,
+            &z,
+            &DensePolynomial::from(Zh),
+            &lagrange_base_1,
+            &zeta,
+            &alpha,
+            &lo,
+            &mid,
+            &hi,
+            domain.len(),
+            &domain,
+        );
+
+        assert_eq!(r_poly.evaluate(&zeta), Fr::zero());
     }
 }

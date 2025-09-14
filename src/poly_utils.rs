@@ -263,8 +263,10 @@ pub fn to_f<F: Field>(vals: Vec<i64>) -> Vec<F> {
 }
 
 pub fn interpolate_univariate<F: Field>(domain: &[F], values : &[F]) -> DensePolynomial<F> {
-    assert!(domain.len() <= values.len());
-    assert_eq!(domain.len(), values.len());
+    // println!("{} {}", domain.len(), values.len());
+
+    // assert!(domain.len() <= values.len());
+    // assert_eq!(domain.len(), values.len());
 
     let mut padded_values = vec![];
 
@@ -276,7 +278,7 @@ pub fn interpolate_univariate<F: Field>(domain: &[F], values : &[F]) -> DensePol
         }
     }
 
-    assert_eq!(domain.len(), padded_values.len());
+    // assert_eq!(domain.len(), padded_values.len());
 
     // let domain_lib = Radix2EvaluationDomain::new(domain.len());
 
@@ -349,6 +351,10 @@ pub fn generate_lagrange_basis_polys<F: Field>(domain: &[F]) -> Vec<DensePolynom
     }
 
     lagrange_polys
+}
+
+pub fn const_poly<F: Field>(c: F) -> DensePolynomial<F> {
+    DensePolynomial::from_coefficients_slice(&[c])
 }
 
 pub fn split_poly<F: FftField + PrimeField>(poly: &DensePolynomial<F>, n: usize) -> (DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>) {

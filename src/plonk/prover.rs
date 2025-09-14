@@ -1,31 +1,39 @@
+use ark_ec::pairing::Pairing;
 use ark_ff::{FftField, Field, PrimeField};
 use ark_poly::{DenseUVPolynomial, Polynomial};
 use ark_poly::univariate::{DenseOrSparsePolynomial, DensePolynomial, SparsePolynomial};
 use ark_std::iterable::Iterable;
 use ark_std::Zero;
+use ark_test_curves::bls12_381::Bls12_381;
+use crate::kzg::{setup, KZG};
 use crate::plonk::blinder::{blind_solution, blind_splitted_t, blind_z_poly};
 use crate::plonk::circuit::{CompiledCircuit, Solution};
 use crate::plonk::permutation::PermutationArgument;
-use crate::plonk::proof::Openings;
-use crate::poly_utils::{generate_lagrange_basis_polys, generate_multiplicative_subgroup, interpolate_univariate, split_poly};
+use crate::plonk::proof::{Commitments, OpeningProofs, Openings, Proof};
+use crate::poly_utils::{const_poly, generate_lagrange_basis_polys, generate_multiplicative_subgroup, interpolate_univariate, split_poly, MultiplicativeSubgroup};
 
-fn prove<F: PrimeField + FftField>(
-    circuit: &CompiledCircuit<F>,
-) {
-
-    let domain = generate_multiplicative_subgroup::<16, F>();
+pub fn prove<P: Pairing>(
+    circuit: &CompiledCircuit<P::ScalarField>,
+    kzg: &KZG<P>,
+    domain: &MultiplicativeSubgroup<P::ScalarField>,
+) -> Proof<P> {
+    println!("domain {:?}", domain);
+    // let tau = P::ScalarField::from(777);
+    // let domain = generate_multiplicative_subgroup::<16, P::ScalarField>();
+    // let config = setup::<P>(domain.len(), tau);
+    // let kzg = KZG::new(config);
     let omega = domain.generator();
     let Zh = domain.get_vanishing_polynomial();
     let (k1, k2) = pick_coset_shifters(&domain);
     let solution = circuit.get_solution(&domain, k1, k2);
-    let solution = blind_solution(solution, &Zh);
+    // let solution = blind_solution(solution, &Zh);
     let lagrange_1 = &generate_lagrange_basis_polys(&domain)[0];
 
-    let (beta, gamma) = generate_beta_gamma::<F>();
+    let (beta, gamma) = generate_beta_gamma();
 
     let permutation_argument = PermutationArgument::new(&domain, &beta, &gamma, &solution);
     let z_poly = permutation_argument.z_poly();
-    let z_poly = blind_z_poly(&z_poly, &Zh);
+    // let z_poly = blind_z_poly(&z_poly, &Zh);
 
     let z_shifted = shift_poly(&z_poly, &omega);
 
@@ -34,11 +42,11 @@ fn prove<F: PrimeField + FftField>(
     let big_t = compute_big_quotient(&solution, &z_poly, &z_shifted, &permutation_argument, &Zh, lagrange_1, &alpha);
 
     let (lo_t, mid_t, hi_t) = split_poly(&big_t, domain.len());
-    let (lo_t, mid_t, hi_t) = blind_splitted_t(&lo_t, &mid_t, &hi_t, domain.len());
+    // let (lo_t, mid_t, hi_t) = blind_splitted_t(&lo_t, &mid_t, &hi_t, domain.len());
 
     let zeta = generate_zeta();
 
-    let openings = compute_openings(&solution, &z_poly, &zeta);
+    let openings = compute_openings(&solution, &z_shifted, &zeta);
 
     let r_poly = linearization_poly(
         &openings,
@@ -54,7 +62,55 @@ fn prove<F: PrimeField + FftField>(
         &hi_t,
         domain.len(),
         &domain,
+        k1,
+        k2,
     );
+
+    println!("r_poly {:?}", r_poly);
+    assert_eq!(r_poly.evaluate(&zeta), P::ScalarField::zero());
+
+    let vi = generate_vi();
+
+    let zeta_openings = kzg.batch_open(
+        &[&r_poly, &solution.a, &solution.b, &solution.c, &solution.s_sigma_1, &solution.s_sigma_2],
+        &zeta,
+        &vi,
+    );
+
+    // let zeta_openings = kzg.batch_open(
+    //     &[&r_poly],
+    //     &zeta,
+    //     &vi,
+    // );
+
+    let zeta_omega_opening = kzg.open(
+        // &z_shifted,
+        &z_poly,
+        &(zeta * omega),
+    );
+    // println!("z(zeta * omega) opening {:?}", zeta_omega_opening);
+    // let zeta_omega_opening = kzg.open(
+    //     &z_shifted,
+    //     &zeta,
+    // );
+    // println!("z_shifted(zeta) opening {:?}", zeta_omega_opening);
+
+    Proof::new(
+        openings,
+        Commitments {
+            a: kzg.commit(&solution.a),
+            b: kzg.commit(&solution.b),
+            c: kzg.commit(&solution.c),
+            z: kzg.commit(&z_poly),
+            t_lo: kzg.commit(&lo_t),
+            t_mid: kzg.commit(&mid_t),
+            t_hi: kzg.commit(&hi_t),
+        },
+        OpeningProofs {
+            w_zeta: zeta_openings.proof(),
+            w_zeta_omega: zeta_omega_opening.proof(),
+        }
+    )
 }
 
 fn compute_gate_check_poly<F: PrimeField + FftField>(solution: &Solution<F>) -> DensePolynomial<F> {
@@ -79,6 +135,10 @@ pub fn generate_vi<F: FftField + PrimeField>() -> F {
 
 pub fn generate_zeta<F: FftField + PrimeField>() -> F {
     F::from(776655)
+}
+
+pub fn generate_u<F: FftField + PrimeField>() -> F {
+    F::from(99901123)
 }
 
 
@@ -175,14 +235,35 @@ fn linearization_poly<F: FftField + PrimeField>(
     t_hi: &DensePolynomial<F>,
     n: usize,
     domain: &[F],
+    k1: F,
+    k2: F,
 ) -> DensePolynomial<F> {
+    // println!("\nopenings {:?}", openings);
+    // println!("\nsolution {:?}", solution);
+    // println!("\npermutation_argument {:?}", permutation_argument);
+    // println!("\nz_poly {:?}", z_poly);
+    // println!("\nZh {:?}", Zh);
+    // println!("\nlagrange_1 {:?}", lagrange_1);
+    // println!("\nzeta {:?}", zeta);
+    // println!("\nalpha {:?}", alpha);
+    // println!("\nt_lo {:?}", t_lo);
+    // println!("\nt_mid {:?}", t_mid);
+    // println!("\nt_hi {:?}", t_hi);
+    // println!("\nn {:?}", n);
+    // println!("\nk1 {:?}", k1);
+    // println!("\nk2 {:?}", k2);
     let gate_check_poly_linearized = &solution.qm * openings.a * openings.b
         + &solution.ql * openings.a
         + &solution.qr * openings.b
         + &solution.qo * openings.c
         + const_poly(solution.pi.evaluate(&zeta)) + &solution.qc;
 
-    let perm_numerator_poly_linearized = z_poly * permutation_argument.numerator_poly().evaluate(&zeta);
+    // let perm_numerator_poly_linearized = z_poly * permutation_argument.numerator_poly().evaluate(&zeta);
+    let perm_numerator_poly_linearized = z_poly * (
+        (openings.a + permutation_argument.beta() * zeta + permutation_argument.gamma())
+        * (openings.b + permutation_argument.beta() * zeta * k1 + permutation_argument.gamma())
+        * (openings.c + permutation_argument.beta() * zeta * k2 + permutation_argument.gamma())
+    );
 
     let sigma_a_linearized = openings.a + permutation_argument.beta() * openings.s_sigma_1 + permutation_argument.gamma();
     let sigma_b_linearized = openings.b + permutation_argument.beta() * openings.s_sigma_2 + permutation_argument.gamma();
@@ -208,22 +289,20 @@ fn linearization_poly<F: FftField + PrimeField>(
     r_poly
 }
 
-fn const_poly<F: Field>(c: F) -> DensePolynomial<F> {
-    DensePolynomial::from_coefficients_slice(&[c])
-}
-
 #[cfg(test)]
 mod tests {
+    use ark_ec::PrimeGroup;
     use ark_ff::Field;
     use ark_poly::{DenseUVPolynomial, Polynomial};
     use ark_poly::univariate::DensePolynomial;
-    use ark_std::{One, Zero};
-    use ark_test_curves::bls12_381::Fr;
-    use crate::kzg::{setup, KZG};
+    use ark_std::{One, UniformRand, Zero};
+    use ark_test_curves::bls12_381::{Bls12_381, Fr, G1Projective};
+    use crate::kzg::{setup, BatchOpening, MultipointOpening, KZG};
     use crate::plonk::blinder::blind_splitted_t;
     use crate::plonk::circuit::get_test_circuit;
     use crate::plonk::permutation::PermutationArgument;
-    use crate::plonk::prover::{compute_big_quotient, compute_gate_check_poly, compute_openings, interpolate_univariate, linearization_poly, pick_coset_shifters, shift_poly};
+    use crate::plonk::proof::{Commitments, OpeningProofs, Proof};
+    use crate::plonk::prover::{compute_big_quotient, compute_gate_check_poly, compute_openings, const_poly, generate_alpha, generate_beta_gamma, generate_u, generate_vi, generate_zeta, interpolate_univariate, linearization_poly, pick_coset_shifters, shift_poly};
     use crate::poly_utils::{generate_lagrange_basis_polys, generate_multiplicative_subgroup, split_poly, to_f};
 
     #[test]
@@ -386,8 +465,217 @@ mod tests {
             &hi,
             domain.len(),
             &domain,
+            k1,
+            k2,
         );
 
         assert_eq!(r_poly.evaluate(&zeta), Fr::zero());
+    }
+
+    #[test]
+    fn test_prove_verify() {
+        let test_circuit = get_test_circuit();
+        let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
+        let omega = domain.generator();
+        let Zh = domain.get_vanishing_polynomial();
+        let (k1, k2) = pick_coset_shifters(&domain);
+        // let beta = Fr::from(43);
+        // let gamma = Fr::from(35);
+        let (beta, gamma) = generate_beta_gamma();
+
+        let solution = test_circuit.get_solution(&domain, k1, k2);
+        let perm_argument = PermutationArgument::new(&domain, &beta, &gamma, &solution);
+        let z = perm_argument.z_poly();
+        let z_shifted = shift_poly(&z, &domain.generator());
+        // let alpha = Fr::from(123);
+        // let zeta = Fr::from(999);
+        let alpha = generate_alpha();
+        let zeta = generate_zeta();
+
+        let lagrange_base_1 = &generate_lagrange_basis_polys(&domain)[0];
+
+        let big_q = compute_big_quotient(
+            &solution,
+            &z,
+            &z_shifted,
+            &perm_argument,
+            &Zh,
+            &lagrange_base_1,
+            &alpha,
+        );
+        let (lo, mid, hi) = split_poly(&big_q, domain.len());
+
+        let openings = compute_openings(&solution, &z_shifted, &zeta);
+        let r_poly = linearization_poly(
+            &openings,
+            &solution,
+            &perm_argument,
+            &z,
+            &DensePolynomial::from(Zh.clone()),
+            &lagrange_base_1,
+            &zeta,
+            &alpha,
+            &lo,
+            &mid,
+            &hi,
+            domain.len(),
+            &domain,
+            k1,
+            k2,
+        );
+
+        assert_eq!(r_poly.evaluate(&zeta), Fr::zero());
+        //
+        let tau = Fr::from(777);
+        let config = setup::<Bls12_381>(domain.len() * 2, tau);
+        let kzg = KZG::new(config);
+
+        let vi = generate_vi();
+        let u = generate_u();
+        //
+        let zeta_openings = kzg.batch_open(
+            &[&r_poly, &solution.a, &solution.b, &solution.c, &solution.s_sigma_1, &solution.s_sigma_2],
+            &zeta,
+            &vi,
+        );
+        // let zeta_openings = kzg.batch_open(
+        //     &[&r_poly, &solution.a, &solution.b, &solution.c, &solution.s_sigma_1, &solution.s_sigma_2],
+        //     &zeta,
+        //     &vi,
+        // );
+        //
+        let zeta_omega_opening = kzg.open(
+            &z_shifted,
+            &zeta,
+        );
+        //
+        let proof = Proof::new(
+            openings.clone(),
+            Commitments::<Bls12_381> {
+                a: kzg.commit(&solution.a),
+                b: kzg.commit(&solution.b),
+                c: kzg.commit(&solution.c),
+                z: kzg.commit(&z),
+                t_lo: kzg.commit(&lo),
+                t_mid: kzg.commit(&mid),
+                t_hi: kzg.commit(&hi),
+            },
+            OpeningProofs {
+                w_zeta: zeta_openings.proof(),
+                w_zeta_omega: zeta_omega_opening.proof(),
+            }
+        );
+
+        // poly
+
+        let mut testing_poly = &solution.qm * openings.a * openings.b
+            + &solution.ql * openings.a
+            + &solution.qr * openings.b
+            + &solution.qo * openings.c
+            + const_poly(solution.pi.evaluate(&zeta))
+            + &solution.qc;
+
+        let perm_numerator_poly_linearized = z.clone() * (
+            (openings.a + perm_argument.beta() * zeta + perm_argument.gamma())
+                * (openings.b + perm_argument.beta() * zeta * k1 + perm_argument.gamma())
+                * (openings.c + perm_argument.beta() * zeta * k2 + perm_argument.gamma())
+        );
+
+        let sigma_a_linearized = openings.a + perm_argument.beta() * openings.s_sigma_1 + perm_argument.gamma();
+        let sigma_b_linearized = openings.b + perm_argument.beta() * openings.s_sigma_2 + perm_argument.gamma();
+        let sigma_c_lin_poly = const_poly(openings.c)
+            + &solution.s_sigma_3 * perm_argument.beta()
+            + const_poly(perm_argument.gamma());
+        let perm_denominator_poly_linearized = sigma_c_lin_poly * sigma_a_linearized * sigma_b_linearized * openings.z_shifted;
+
+        let perm_start_linearized = (z.clone() - const_poly(Fr::one())) * lagrange_base_1.evaluate(&zeta);
+
+        let linearized_vanishing_t = (
+            lo.clone()
+                + mid.clone() * zeta.pow([domain.len() as u64])
+                + hi.clone() * zeta.pow([domain.len() as u64 * 2])
+        ) * Zh.evaluate(&zeta);
+
+        testing_poly = testing_poly + perm_numerator_poly_linearized * alpha;
+        testing_poly = testing_poly - perm_denominator_poly_linearized * alpha;
+        testing_poly = testing_poly + perm_start_linearized * alpha.square();
+        testing_poly = testing_poly - linearized_vanishing_t;
+
+        println!("testing_poly {:?}", testing_poly);
+        println!("tsting r_poly {:?}", r_poly);
+
+        assert_eq!(testing_poly, r_poly);
+
+        let testing_open = kzg.open(&testing_poly, &zeta);
+
+        let mut D = kzg.commit(&solution.qm) * openings.a * openings.b
+            + kzg.commit(&solution.ql) * openings.a
+            + kzg.commit(&solution.qr) * openings.b
+            + kzg.commit(&solution.qo) * openings.c
+            + kzg.commit(&const_poly(solution.pi.evaluate(&zeta)))
+            + kzg.commit(&solution.qc);
+        
+        D += proof.commitments.z * alpha * (openings.a + beta * zeta + gamma)
+                * (openings.b + beta * zeta * k1 + gamma)
+                * (openings.c + beta * zeta * k2 + gamma);
+
+        D -= (G1Projective::generator() * openings.c + kzg.commit(&solution.s_sigma_3) * beta + G1Projective::generator() * gamma) * alpha
+            * (openings.a + beta * openings.s_sigma_1 + gamma)
+            * (openings.b + beta * openings.s_sigma_2 + gamma) * openings.z_shifted;
+
+        D += (proof.commitments.z - G1Projective::generator() * Fr::one()) * lagrange_base_1.evaluate(&zeta) * alpha.square();
+
+        D -= (proof.commitments.t_lo + proof.commitments.t_mid * zeta.pow([domain.len() as u64]) + proof.commitments.t_hi * zeta.pow([domain.len() as u64 * 2])) * Zh.evaluate(&zeta);
+
+        let mut eval = solution.qm.evaluate(&zeta) * openings.a * openings.b
+            + solution.ql.evaluate(&zeta) * openings.a
+            + solution.qr.evaluate(&zeta) * openings.b
+            + solution.qo.evaluate(&zeta) * openings.c
+            + solution.pi.evaluate(&zeta)
+            + solution.qc.evaluate(&zeta);
+
+        eval += z.evaluate(&zeta) * alpha * (openings.a + beta * zeta + gamma)
+            * (openings.b + beta * zeta * k1 + gamma)
+            * (openings.c + beta * zeta * k2 + gamma);
+
+        eval -= (openings.a + beta * openings.s_sigma_1 + gamma)
+            * (openings.b + beta * openings.s_sigma_2 + gamma)
+            * (openings.c + beta * solution.s_sigma_3.evaluate(&zeta) + gamma) * alpha * openings.z_shifted;
+
+        eval += alpha.square() * (z.evaluate(&zeta) - Fr::one()) * lagrange_base_1.evaluate(&zeta);
+
+        eval -= Zh.evaluate(&zeta)
+            * (
+            lo.evaluate(&zeta)
+                + mid.evaluate(&zeta) * zeta.pow([domain.len() as u64])
+                + hi.evaluate(&zeta) * zeta.pow([domain.len() as u64 * 2])
+        );
+
+        assert_eq!(testing_open.evaluation, eval);
+
+        println!("eval {}", eval);
+
+        let is_valid = kzg.check_multipoint(
+            &[
+                MultipointOpening {
+                    batch_opening: &BatchOpening::new(
+                        vec![Fr::zero()],
+                        testing_open.proof(),
+                    ),
+                    linearization_scalar: &vi,
+                    opening_point: &zeta,
+                    commitments: &[D],
+                }
+            ],
+            &u,
+        );
+
+        assert!(is_valid);
+
+        assert_eq!(z_shifted.evaluate(&zeta), z.evaluate(&(zeta * omega)));
+
+        let rand = Fr::from(333444);
+
+        assert_eq!(z_shifted.evaluate(&rand), z.evaluate(&(rand * omega)));
     }
 }

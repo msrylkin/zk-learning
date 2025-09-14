@@ -10,18 +10,18 @@ use ark_poly::{DenseUVPolynomial, Polynomial};
 
 pub struct Config<P: Pairing> {
     srs: Vec<P::G1>,
-    verifier_key: P::G2,
+    pub verifier_key: P::G2,
 }
 
 pub struct KZG<P: Pairing> {
-    config: Config<P>,
+    pub config: Config<P>,
 }
 
-struct MultipointOpening<'a, P: Pairing> {
-    batch_opening: &'a BatchOpening<P>,
-    linearization_scalar: &'a P::ScalarField,
-    opening_point: &'a P::ScalarField,
-    commitments: &'a [P::G1],
+pub struct MultipointOpening<'a, P: Pairing> {
+    pub batch_opening: &'a BatchOpening<P>,
+    pub linearization_scalar: &'a P::ScalarField,
+    pub opening_point: &'a P::ScalarField,
+    pub commitments: &'a [P::G1],
 }
 
 pub fn setup<P: Pairing>(n: usize, toxic_waste: P::ScalarField) -> Config<P> {
@@ -31,9 +31,10 @@ pub fn setup<P: Pairing>(n: usize, toxic_waste: P::ScalarField) -> Config<P> {
     }
 }
 
-struct Opening<P: Pairing> {
-    evaluation: P::ScalarField,
-    evaluation_proof: P::G1,
+#[derive(Debug)]
+pub struct Opening<P: Pairing> {
+    pub evaluation: P::ScalarField,
+    pub evaluation_proof: P::G1,
 }
 
 impl<P: Pairing> Opening<P> {
@@ -45,9 +46,21 @@ impl<P: Pairing> Opening<P> {
     }
 }
 
-struct BatchOpening<P: Pairing> {
+pub struct BatchOpening<P: Pairing> {
     evaluations: Vec<P::ScalarField>,
     evaluation_proof: P::G1,
+}
+
+impl<P: Pairing> BatchOpening<P> {
+    pub fn proof(&self) -> P::G1 {
+        self.evaluation_proof.clone()
+    }
+}
+
+impl<P: Pairing> Opening<P> {
+    pub fn proof(&self) -> P::G1 {
+        self.evaluation_proof.clone()
+    }
 }
 
 impl<P: Pairing> BatchOpening<P> {
@@ -202,7 +215,7 @@ impl<P: Pairing> KZG<P> {
         linearized_commitments - P::G1::generator() * linearized_evaluations
     }
 
-    fn check_multipoint(
+    pub fn check_multipoint(
         &self,
         // commitments: &[P::G1],
         multipoint_openings: &[MultipointOpening<P>],

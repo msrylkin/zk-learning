@@ -101,6 +101,7 @@ pub struct CompiledCircuit<F: FftField + PrimeField> {
     public_inputs_count: usize,
 }
 
+#[derive(Clone, Debug)]
 pub struct Solution<F: FftField + PrimeField> {
     pub a: DensePolynomial<F>,
     pub b: DensePolynomial<F>,

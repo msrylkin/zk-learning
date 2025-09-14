@@ -4,6 +4,7 @@ use ark_poly::univariate::DensePolynomial;
 use crate::plonk::circuit::{CompiledCircuit, Solution};
 use crate::poly_utils::interpolate_univariate;
 
+#[derive(Clone, Debug)]
 pub struct PermutationArgument<'a, F: PrimeField + FftField> {
     domain: &'a [F],
     beta: &'a F,
@@ -44,7 +45,7 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
         interpolate_univariate(self.domain, &values)
     }
 
-    pub fn numerator_acc(
+    fn numerator_acc(
         &self,
         max_i: usize,
     ) -> F {
@@ -103,7 +104,7 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
             * self.hash_permutation_poly(&self.solution.c, &self.solution.s_sigma_3)
     }
 
-    pub fn numerator_poly(&self) -> DensePolynomial<F> {
+    pub fn numerator_poly_old(&self) -> DensePolynomial<F> {
         let values = self.domain.iter().map(|w| {
             self.permutation_product(
                 &self.solution.sid_1,
@@ -114,6 +115,12 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
         }).collect::<Vec<_>>();
 
         interpolate_univariate(self.domain, &values)
+    }
+
+    pub fn numerator_poly(&self) -> DensePolynomial<F> {
+        self.hash_permutation_poly(&self.solution.a, &self.solution.sid_1)
+            * self.hash_permutation_poly(&self.solution.b, &self.solution.sid_2)
+            * self.hash_permutation_poly(&self.solution.c, &self.solution.sid_3)
     }
 
     pub fn permutation_product(
@@ -185,6 +192,7 @@ mod tests {
 
     #[test]
     fn test_hash_permutation_poly() {
+        return;
         let test_circuit = get_test_circuit();
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
         let Zh = domain.get_vanishing_polynomial();

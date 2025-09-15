@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 use ark_ff::{FftField, Field, PrimeField};
-use ark_poly::univariate::DensePolynomial;
+use ark_poly::univariate::{DensePolynomial, SparsePolynomial};
 use ark_std::iterable::Iterable;
-use ark_test_curves::bls12_381::Fr;
-use crate::poly_utils::interpolate_univariate;
+use crate::poly_utils::{interpolate_univariate, MultiplicativeSubgroup};
 
 struct CircuitBuilder<F: FftField + PrimeField> {
     circuit: Circuit<F>,
@@ -128,7 +127,7 @@ fn format_bool<F: Field>(b: bool) -> F {
 }
 
 impl<F: FftField + PrimeField> CompiledCircuit<F> {
-    pub fn get_abc_vectors(&self) -> (Vec<F>, Vec<F>, Vec<F>) {
+    pub fn get_abc_vectors(&self, domain: &[F]) -> (Vec<F>, Vec<F>, Vec<F>) {
         let mut a = vec![];
         let mut b = vec![];
         let mut c = vec![];
@@ -139,24 +138,32 @@ impl<F: FftField + PrimeField> CompiledCircuit<F> {
             c.push(gate.output);
         }
 
-        let padded_n = self.padded_len();
-        for _ in 0..padded_n - self.gates.len() {
+        for _ in self.gates.len()..domain.len() {
             a.push(F::zero());
             b.push(F::zero());
             c.push(F::zero());
         }
 
+        // let padded_n = self.padded_len();
+        // let padded_n =
+        // for _ in 0..padded_n - self.gates.len() {
+        //     a.push(F::zero());
+        //     b.push(F::zero());
+        //     c.push(F::zero());
+        // }
+
         (a, b, c)
     }
 
-    pub fn padded_len(&self) -> usize {
-        let n = self.gates.len();
-
-        match n.is_power_of_two() {
-            true => n,
-            false => n.next_power_of_two(),
-        }
-    }
+    // pub fn padded_len(&self) -> usize {
+    //     // self
+    //     // let n = self.gates.len();
+    //     //
+    //     // match n.is_power_of_two() {
+    //     //     true => n,
+    //     //     false => n.next_power_of_two(),
+    //     // }
+    // }
 
     pub fn get_sigma(&self) -> Vec<usize> {
         self.sigma.clone()
@@ -179,7 +186,8 @@ impl<F: FftField + PrimeField> CompiledCircuit<F> {
             qc_values.push(gate.qc);
         }
 
-        let padded_n = self.padded_len();
+        // let padded_n = self.padded_len();
+        let padded_n = domain.len();
         for _ in 0..padded_n - self.gates.len() {
             ql_values.push(format_bool(false));
             qr_values.push(format_bool(false));
@@ -227,7 +235,8 @@ impl<F: FftField + PrimeField> CompiledCircuit<F> {
             values.push(permuted_omega);
         }
 
-        let padded_n = self.padded_len();
+        // let padded_n = self.padded_len();
+        let padded_n = domain.len();
         for i in self.gates.len()..padded_n {
             values.push(self.get_coset_shifter(col, k1, k2) * domain[i]);
         }
@@ -237,7 +246,8 @@ impl<F: FftField + PrimeField> CompiledCircuit<F> {
 
     fn s_id_poly(&self, col: usize, domain: &[F], k1: F, k2: F) -> DP<F> {
         let mut values = vec![];
-        let n = self.padded_len();
+        // let n = self.padded_len();
+        let n = domain.len();
 
         for i in 0..n {
             let permuted_omega = self.get_coset_shifter(col, k1, k2) * domain[i];
@@ -268,7 +278,7 @@ impl<F: FftField + PrimeField> CompiledCircuit<F> {
 
     pub fn get_public_input_poly(&self, domain: &[F]) -> DensePolynomial<F> {
         let values = self
-            .get_abc_vectors().0
+            .get_abc_vectors(domain).0
             .iter()
             .enumerate()
             .map(|(i, e)| {
@@ -282,14 +292,19 @@ impl<F: FftField + PrimeField> CompiledCircuit<F> {
 
         interpolate_univariate(&domain, &values)
     }
-    
-    pub fn get_solution(&self, domain: &[F], k1: F, k2: F) -> Solution<F> {
-        let (a, b, c) = self.get_abc_vectors();
-        let (a, b, c) = (
+
+    fn get_abc_polys(&self, domain: &[F]) -> (DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>) {
+        let (a, b, c) = self.get_abc_vectors(domain);
+
+        (
             interpolate_univariate(domain, &a),
             interpolate_univariate(domain, &b),
             interpolate_univariate(domain, &c),
-        );
+        )
+    }
+    
+    pub fn get_solution(&self, domain: &MultiplicativeSubgroup<F>, k1: F, k2: F) -> Solution<F> {
+        let (a, b, c) = self.get_abc_polys(domain);
         let (ql, qr, qm , qo, qc) = self.get_selectors(domain);
         let (sid_1, sid_2, sid_3) = self.get_s_id_polys(domain, k1, k2);
         let (s_sigma_1, s_sigma_2, s_sigma_3) = self.get_sigma_polys(domain, k1, k2);
@@ -425,8 +440,21 @@ mod tests {
     use crate::poly_utils::generate_multiplicative_subgroup;
 
     #[test]
+    pub fn test_abc() {
+        let domain = generate_multiplicative_subgroup::<{ 1 << 4 }, Fr>();
+        let (k1, k2) = pick_coset_shifters(&domain);
+        let test_circuit = get_test_circuit::<Fr>();
+
+        let (a,b,c) = test_circuit.get_abc_vectors(&domain);
+        println!("a {:?}", a);
+        // let (a_poly, b_poly, c_poly) = test_circuit.get_
+
+        // for
+    }
+
+    #[test]
     pub fn test_s_id() {
-        let domain = generate_multiplicative_subgroup::<{ 1<< 3 }, Fr>();
+        let domain = generate_multiplicative_subgroup::<{ 1 << 4 }, Fr>();
         let (k1, k2) = pick_coset_shifters(&domain);
         let k1_coset = domain.iter().map(|e| k1 * *e).collect::<Vec<_>>();
         let k2_coset = domain.iter().map(|e| k2 * *e).collect::<Vec<_>>();

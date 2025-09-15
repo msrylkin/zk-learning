@@ -2,7 +2,7 @@ use ark_ff::{FftField, Field, PrimeField};
 use ark_poly::Polynomial;
 use ark_poly::univariate::DensePolynomial;
 use crate::plonk::circuit::{CompiledCircuit, Solution};
-use crate::poly_utils::interpolate_univariate;
+use crate::poly_utils::{const_poly, interpolate_univariate};
 
 #[derive(Clone, Debug)]
 pub struct PermutationArgument<'a, F: PrimeField + FftField> {
@@ -31,7 +31,7 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
         f.evaluate(&point) + *self.beta * perm_poly.evaluate(&point) + *self.gamma
     }
 
-    pub fn hash_permutation_poly(
+    pub fn hash_permutation_poly_old(
         &self,
         f: &DensePolynomial<F>,
         perm_poly: &DensePolynomial<F>,
@@ -43,6 +43,14 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
         }
 
         interpolate_univariate(self.domain, &values)
+    }
+
+    pub fn hash_permutation_poly(
+        &self,
+        f: &DensePolynomial<F>,
+        perm_poly: &DensePolynomial<F>,
+    ) -> DensePolynomial<F> {
+        f + perm_poly * const_poly(*self.beta) + const_poly(*self.gamma)
     }
 
     fn numerator_acc(
@@ -192,9 +200,9 @@ mod tests {
 
     #[test]
     fn test_hash_permutation_poly() {
-        return;
+        // return;
         let test_circuit = get_test_circuit();
-        let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
+        let domain = generate_multiplicative_subgroup::<{ 1u64 << 5 }, Fr>();
         let Zh = domain.get_vanishing_polynomial();
         let Zh = DensePolynomial::from(Zh);
         let (k1, k2) = pick_coset_shifters(&domain);
@@ -237,11 +245,11 @@ mod tests {
 
         assert_eq!(
             num_poly,
-            reduced_num_poly,
+            custom_num_poly,
         );
         assert_ne!(
             num_poly,
-            custom_num_poly,
+            reduced_num_poly,
         );
 
         assert_eq!(

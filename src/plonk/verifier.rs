@@ -4,8 +4,6 @@ use ark_ff::Field;
 use ark_poly::Polynomial;
 use ark_poly::univariate::DensePolynomial;
 use ark_std::{One, Zero};
-use ark_test_curves::bls12_381::{Fr, G1Projective};
-use crate::kzg;
 use crate::kzg::{setup, BatchOpening, MultipointOpening, KZG};
 use crate::plonk::circuit::{CompiledCircuit, Solution};
 use crate::plonk::proof::Proof;
@@ -37,7 +35,7 @@ pub fn verify<P: Pairing>(
 
     let pi_zeta = pi.evaluate(&zeta);
 
-    let r0 = pi_zeta
+    let _r0 = pi_zeta
         + alpha.square() * lagrange_eval
         - alpha
             * (proof.openings.a + beta * proof.openings.s_sigma_1 + gamma)

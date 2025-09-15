@@ -6,9 +6,10 @@ use ark_poly::univariate::DensePolynomial;
 use ark_std::{One, Zero};
 use crate::kzg::{setup, BatchOpening, MultipointOpening, KZG};
 use crate::plonk::circuit::{CompiledCircuit, Solution};
+use crate::plonk::evaluation_domain::MultiplicativeSubgroup;
 use crate::plonk::proof::Proof;
 use crate::plonk::prover::{generate_alpha, generate_beta_gamma, generate_u, generate_vi, generate_zeta, pick_coset_shifters};
-use crate::poly_utils::{const_poly, generate_lagrange_basis_polys, generate_multiplicative_subgroup, MultiplicativeSubgroup};
+use crate::poly_utils::{const_poly, generate_lagrange_basis_polys};
 
 pub fn verify<P: Pairing>(
     circuit: &CompiledCircuit<P::ScalarField>,

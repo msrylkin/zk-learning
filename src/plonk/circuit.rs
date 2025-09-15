@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use ark_ff::{FftField, Field, PrimeField};
 use ark_poly::univariate::{DensePolynomial, SparsePolynomial};
 use ark_std::iterable::Iterable;
-use crate::poly_utils::{interpolate_univariate, MultiplicativeSubgroup};
+use crate::plonk::evaluation_domain::MultiplicativeSubgroup;
+use crate::poly_utils::{interpolate_univariate};
 
 struct CircuitBuilder<F: FftField + PrimeField> {
     circuit: Circuit<F>,
@@ -436,8 +437,8 @@ mod tests {
     use ark_std::iterable::Iterable;
     use ark_test_curves::bls12_381::Fr;
     use crate::plonk::circuit::{get_test_circuit, Circuit, CircuitBuilder, CircuitGate, CompiledCircuit, CompiledGate, Input, Variable};
+    use crate::plonk::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::prover::pick_coset_shifters;
-    use crate::poly_utils::generate_multiplicative_subgroup;
 
     #[test]
     pub fn test_abc() {

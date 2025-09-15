@@ -172,9 +172,10 @@ mod tests {
     use ark_std::One;
     use ark_test_curves::bls12_381::Fr;
     use crate::plonk::circuit::get_test_circuit;
+    use crate::plonk::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::permutation::PermutationArgument;
     use crate::plonk::prover::{pick_coset_shifters};
-    use crate::poly_utils::{generate_multiplicative_subgroup, interpolate_univariate};
+    use crate::poly_utils::interpolate_univariate;
 
     #[test]
     fn test_permutation_poly_acc() {

@@ -12,9 +12,9 @@ mod tests {
     use ark_test_curves::bls12_381::{Bls12_381, Fr};
     use crate::kzg::{setup, KZG};
     use crate::plonk::circuit::get_test_circuit;
+    use crate::plonk::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::prover::prove;
     use crate::plonk::verifier::verify;
-    use crate::poly_utils::generate_multiplicative_subgroup;
 
     #[test]
     pub fn protocol_test() {

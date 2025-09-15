@@ -8,9 +8,10 @@ use ark_test_curves::bls12_381::Bls12_381;
 use crate::kzg::{setup, KZG};
 use crate::plonk::blinder::{blind_solution, blind_splitted_t, blind_z_poly};
 use crate::plonk::circuit::{CompiledCircuit, Solution};
+use crate::plonk::evaluation_domain::MultiplicativeSubgroup;
 use crate::plonk::permutation::PermutationArgument;
 use crate::plonk::proof::{Commitments, OpeningProofs, Openings, Proof};
-use crate::poly_utils::{const_poly, generate_lagrange_basis_polys, generate_multiplicative_subgroup, interpolate_univariate, split_poly, MultiplicativeSubgroup};
+use crate::poly_utils::{const_poly, generate_lagrange_basis_polys, interpolate_univariate, split_poly};
 
 pub fn prove<P: Pairing>(
     circuit: &CompiledCircuit<P::ScalarField>,
@@ -271,10 +272,11 @@ mod tests {
     use crate::kzg::{setup, BatchOpening, MultipointOpening, KZG};
     use crate::plonk::blinder::{blind_solution, blind_splitted_t};
     use crate::plonk::circuit::get_test_circuit;
+    use crate::plonk::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::permutation::PermutationArgument;
     use crate::plonk::proof::{Commitments, OpeningProofs, Proof};
     use crate::plonk::prover::{compute_big_quotient, compute_gate_check_poly, compute_openings, const_poly, generate_alpha, generate_beta_gamma, generate_u, generate_vi, generate_zeta, interpolate_univariate, linearization_poly, pick_coset_shifters, shift_poly};
-    use crate::poly_utils::{generate_lagrange_basis_polys, generate_multiplicative_subgroup, split_poly, to_f};
+    use crate::poly_utils::{generate_lagrange_basis_polys, split_poly, to_f};
 
     #[test]
     fn pick_coset_shifters_test() {

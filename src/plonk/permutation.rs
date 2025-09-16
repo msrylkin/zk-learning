@@ -1,19 +1,20 @@
 use ark_ff::{FftField, Field, PrimeField};
 use ark_poly::Polynomial;
 use ark_poly::univariate::DensePolynomial;
+use crate::evaluation_domain::MultiplicativeSubgroup;
 use crate::plonk::circuit::{CompiledCircuit, Solution};
-use crate::poly_utils::{const_poly, interpolate_univariate};
+use crate::poly_utils::{const_poly};
 
 #[derive(Clone, Debug)]
 pub struct PermutationArgument<'a, F: PrimeField + FftField> {
-    domain: &'a [F],
+    domain: &'a MultiplicativeSubgroup<F>,
     beta: &'a F,
     gamma: &'a F,
     solution: &'a Solution<F>,
 }
 
 impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
-    pub fn new(domain: &'a [F], beta: &'a F, gamma: &'a F, solution: &'a Solution<F>) -> Self {
+    pub fn new(domain: &'a MultiplicativeSubgroup<F>, beta: &'a F, gamma: &'a F, solution: &'a Solution<F>) -> Self {
         Self {
             domain,
             beta,
@@ -42,7 +43,7 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
             values.push(self.hash_permutation(f, perm_poly, w));
         }
 
-        interpolate_univariate(self.domain, &values)
+        self.domain.interpolate_univariate(&values)
     }
 
     pub fn hash_permutation_poly(
@@ -103,7 +104,7 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
             )
         }).collect::<Vec<_>>();
 
-        interpolate_univariate(self.domain, &values)
+        self.domain.interpolate_univariate(&values)
     }
 
     pub fn denominator_poly(&self) -> DensePolynomial<F> {
@@ -122,7 +123,7 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
             )
         }).collect::<Vec<_>>();
 
-        interpolate_univariate(self.domain, &values)
+        self.domain.interpolate_univariate(&values)
     }
 
     pub fn numerator_poly(&self) -> DensePolynomial<F> {
@@ -153,7 +154,7 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
             })
             .collect::<Vec<_>>();
 
-        interpolate_univariate(self.domain, &values)
+        self.domain.interpolate_univariate(&values)
     }
 
     pub fn beta(&self) -> F {
@@ -172,10 +173,9 @@ mod tests {
     use ark_std::One;
     use ark_test_curves::bls12_381::Fr;
     use crate::plonk::circuit::get_test_circuit;
-    use crate::plonk::evaluation_domain::generate_multiplicative_subgroup;
+    use crate::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::permutation::PermutationArgument;
     use crate::plonk::prover::{pick_coset_shifters};
-    use crate::poly_utils::interpolate_univariate;
 
     #[test]
     fn test_permutation_poly_acc() {
@@ -203,16 +203,21 @@ mod tests {
     fn test_hash_permutation_poly() {
         // return;
         let test_circuit = get_test_circuit();
-        let domain = generate_multiplicative_subgroup::<{ 1u64 << 5 }, Fr>();
+        let domain = generate_multiplicative_subgroup::<{ 1u64 << 8 }, Fr>();
+        println!("1");
         let Zh = domain.get_vanishing_polynomial();
         let Zh = DensePolynomial::from(Zh);
         let (k1, k2) = pick_coset_shifters(&domain);
+        println!("2");
+
 
         let beta = Fr::from(43);
         let gamma = Fr::from(35);
 
         let solution = test_circuit.get_solution(&domain, k1, k2);
         let permutation = PermutationArgument::new(&domain, &beta, &gamma, &solution);
+        println!("3");
+
 
         let num_poly = permutation.numerator_poly();
         let denom_poly = permutation.denominator_poly();
@@ -221,11 +226,15 @@ mod tests {
             * permutation.hash_permutation_poly(&solution.b, &solution.sid_2)
             * permutation.hash_permutation_poly(&solution.c, &solution.sid_3);
 
+        println!("4");
+
         let mut reduced_num_values = vec![];
         for w in &domain {
             reduced_num_values.push(custom_num_poly.evaluate(&w));
         }
-        let reduced_num_poly = interpolate_univariate(&domain, &reduced_num_values);
+        let reduced_num_poly = domain.interpolate_univariate(&reduced_num_values);
+
+        println!("5");
 
         let custom_denom_poly = permutation.hash_permutation_poly(&solution.a, &solution.s_sigma_1)
             * permutation.hash_permutation_poly(&solution.b, &solution.s_sigma_2)
@@ -235,7 +244,9 @@ mod tests {
         for w in &domain {
             reduced_denom_values.push(custom_denom_poly.evaluate(&w));
         }
-        let reduced_denom_poly = interpolate_univariate(&domain, &reduced_denom_values);
+        let reduced_denom_poly = domain.interpolate_univariate(&reduced_denom_values);
+
+        println!("6");
 
         for w in &domain {
             assert_eq!(num_poly.evaluate(&w), reduced_num_poly.evaluate(&w));
@@ -243,6 +254,9 @@ mod tests {
             assert_eq!(denom_poly.evaluate(&w), reduced_denom_poly.evaluate(&w));
             assert_eq!(denom_poly.evaluate(&w), custom_denom_poly.evaluate(&w));
         }
+
+        println!("7");
+
 
         assert_eq!(
             num_poly,

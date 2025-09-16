@@ -4,14 +4,13 @@ use ark_poly::{DenseUVPolynomial, Polynomial};
 use ark_poly::univariate::{DenseOrSparsePolynomial, DensePolynomial, SparsePolynomial};
 use ark_std::iterable::Iterable;
 use ark_std::Zero;
-use ark_test_curves::bls12_381::Bls12_381;
-use crate::kzg::{setup, KZG};
+use crate::kzg::{KZG};
 use crate::plonk::blinder::{blind_solution, blind_splitted_t, blind_z_poly};
 use crate::plonk::circuit::{CompiledCircuit, Solution};
-use crate::plonk::evaluation_domain::MultiplicativeSubgroup;
+use crate::evaluation_domain::MultiplicativeSubgroup;
 use crate::plonk::permutation::PermutationArgument;
 use crate::plonk::proof::{Commitments, OpeningProofs, Openings, Proof};
-use crate::poly_utils::{const_poly, generate_lagrange_basis_polys, interpolate_univariate, split_poly};
+use crate::poly_utils::{const_poly, split_poly};
 
 pub fn prove<P: Pairing>(
     circuit: &CompiledCircuit<P::ScalarField>,
@@ -25,7 +24,7 @@ pub fn prove<P: Pairing>(
     let solution = circuit.get_solution(&domain, k1, k2);
     let solution = blind_solution(solution, &Zh);
 
-    let lagrange_1 = &generate_lagrange_basis_polys(&domain)[0];
+    let lagrange_1 = domain.lagrange_polys().first().unwrap();
 
     let (beta, gamma) = generate_beta_gamma();
 
@@ -272,11 +271,11 @@ mod tests {
     use crate::kzg::{setup, BatchOpening, MultipointOpening, KZG};
     use crate::plonk::blinder::{blind_solution, blind_splitted_t};
     use crate::plonk::circuit::get_test_circuit;
-    use crate::plonk::evaluation_domain::generate_multiplicative_subgroup;
+    use crate::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::permutation::PermutationArgument;
     use crate::plonk::proof::{Commitments, OpeningProofs, Proof};
-    use crate::plonk::prover::{compute_big_quotient, compute_gate_check_poly, compute_openings, const_poly, generate_alpha, generate_beta_gamma, generate_u, generate_vi, generate_zeta, interpolate_univariate, linearization_poly, pick_coset_shifters, shift_poly};
-    use crate::poly_utils::{generate_lagrange_basis_polys, split_poly, to_f};
+    use crate::plonk::prover::{compute_big_quotient, compute_gate_check_poly, compute_openings, const_poly, generate_alpha, generate_beta_gamma, generate_u, generate_vi, generate_zeta, linearization_poly, pick_coset_shifters, shift_poly};
+    use crate::poly_utils::{split_poly, to_f};
 
     #[test]
     fn pick_coset_shifters_test() {
@@ -303,9 +302,9 @@ mod tests {
         let (k1, k2) = pick_coset_shifters(&domain);
         let (a, b, c) = test_circuit.get_abc_vectors(&domain);
         let (a, b, c) = (
-            interpolate_univariate(&domain, &a),
-            interpolate_univariate(&domain, &b),
-            interpolate_univariate(&domain, &c),
+            domain.interpolate_univariate(&a),
+            domain.interpolate_univariate(&b),
+            domain.interpolate_univariate(&c),
         );
 
         let beta = Fr::from(43);
@@ -354,7 +353,7 @@ mod tests {
             &z_shifted,
             &perm_argument,
             &Zh,
-            &generate_lagrange_basis_polys(&domain)[0],
+            domain.lagrange_polys().first().unwrap(),
             &alpha,
         );
 
@@ -364,7 +363,7 @@ mod tests {
         let perm_numerator_poly = perm_argument.numerator_poly() * z;
         let z = perm_argument.z_poly();
         let perm_denominator_poly = perm_argument.denominator_poly() * z_shifted;
-        let lagrange_base_1 = &generate_lagrange_basis_polys(&domain)[0];
+        let lagrange_base_1 = domain.lagrange_polys().first().unwrap();
         let z_poly_m1 = (z - DensePolynomial::from_coefficients_slice(&[Fr::one()])) * lagrange_base_1;
         let alpha = Fr::from(123);
 
@@ -410,7 +409,7 @@ mod tests {
         let alpha = Fr::from(123);
         let zeta = Fr::from(999);
 
-        let lagrange_base_1 = &generate_lagrange_basis_polys(&domain)[0];
+        let lagrange_base_1 = domain.lagrange_polys().first().unwrap();
 
         let big_q = compute_big_quotient(
             &solution,
@@ -462,7 +461,7 @@ mod tests {
         let alpha = generate_alpha();
         let zeta = generate_zeta();
 
-        let lagrange_base_1 = &generate_lagrange_basis_polys(&domain)[0];
+        let lagrange_base_1 = domain.lagrange_polys().first().unwrap();
 
         let big_q = compute_big_quotient(
             &solution,

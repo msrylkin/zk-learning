@@ -1,7 +1,7 @@
 use std::ops::Deref;
 use ark_ff::{Field, PrimeField};
 use ark_poly::univariate::{DensePolynomial, SparsePolynomial};
-use crate::poly_utils::{generate_lagrange_basis_polys};
+use crate::poly_utils::{generate_lagrange_basis_polys, interpolate_on_lagrange_basis_polys};
 
 #[derive(Debug)]
 pub struct MultiplicativeSubgroup<F: PrimeField> {
@@ -40,6 +40,14 @@ impl<F: PrimeField> MultiplicativeSubgroup<F> {
 
     pub fn generator(&self) -> F {
         self.generator
+    }
+
+    pub fn lagrange_polys(&self) -> &[DensePolynomial<F>] {
+        self.lagrange_polys.as_slice()
+    }
+
+    pub fn interpolate_univariate(&self, values: &[F]) -> DensePolynomial<F> {
+        interpolate_on_lagrange_basis_polys(&self.lagrange_polys.as_slice(), values)
     }
 }
 
@@ -98,8 +106,8 @@ mod tests {
     use ark_poly::univariate::DensePolynomial;
     use ark_std::{One, Zero};
     use ark_test_curves::bls12_381::Fr;
-    use crate::plonk::evaluation_domain::generate_multiplicative_subgroup;
-    use crate::poly_utils::{interpolate_univariate, to_f};
+    use crate::evaluation_domain::generate_multiplicative_subgroup;
+    use crate::poly_utils::{to_f};
 
     #[test]
     fn vanishing_poly_test() {
@@ -148,7 +156,7 @@ mod tests {
         let values = to_f::<Fr>(vec![8,10,15]);
         let domain = generate_multiplicative_subgroup::<3, Fr>();
 
-        let poly = interpolate_univariate(&domain, &values);
+        let poly = domain.interpolate_univariate(&values);
 
         for (y, x) in values.into_iter().zip(domain.into_iter()) {
             assert_eq!(poly.evaluate(&x), y);

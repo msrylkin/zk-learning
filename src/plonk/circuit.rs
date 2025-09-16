@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use ark_ff::{FftField, Field, PrimeField};
+use ark_poly::Radix2EvaluationDomain;
 use ark_poly::univariate::{DensePolynomial, SparsePolynomial};
 use ark_std::iterable::Iterable;
-use crate::plonk::evaluation_domain::MultiplicativeSubgroup;
-use crate::poly_utils::{interpolate_univariate};
+use crate::evaluation_domain::MultiplicativeSubgroup;
 
 struct CircuitBuilder<F: FftField + PrimeField> {
     circuit: Circuit<F>,
@@ -33,9 +33,7 @@ impl<F: PrimeField + FftField> CircuitBuilder<F> {
         }
     }
 
-    fn create_var() {
-
-    }
+    fn create_var() {}
 
     // fn create_public_var(&mut self) -> usize {
     //     // let var_id = self.last_var;
@@ -170,7 +168,7 @@ impl<F: FftField + PrimeField> CompiledCircuit<F> {
         self.sigma.clone()
     }
 
-    pub fn get_selectors(&self, domain: &[F]) -> (
+    pub fn get_selectors(&self, domain: &MultiplicativeSubgroup<F>) -> (
         DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>
     ) {
         let mut ql_values = vec![];
@@ -197,11 +195,11 @@ impl<F: FftField + PrimeField> CompiledCircuit<F> {
             qc_values.push(F::zero());
         }
 
-        let ql = interpolate_univariate(domain, &ql_values);
-        let qr = interpolate_univariate(domain, &qr_values);
-        let qm = interpolate_univariate(domain, &qm_values);
-        let qo = interpolate_univariate(domain, &qo_values);
-        let qc = interpolate_univariate(domain, &qc_values);
+        let ql = domain.interpolate_univariate(&ql_values);
+        let qr = domain.interpolate_univariate(&qr_values);
+        let qm = domain.interpolate_univariate(&qm_values);
+        let qo = domain.interpolate_univariate(&qo_values);
+        let qc = domain.interpolate_univariate( &qc_values);
 
         (ql, qr, qm , qo, qc)
     }
@@ -210,7 +208,7 @@ impl<F: FftField + PrimeField> CompiledCircuit<F> {
         self.sigma[from]
     }
 
-    pub fn get_sigma_polys(&self, domain: &[F], k1: F, k2: F) -> (DP<F>, DP<F>, DP<F>) {
+    pub fn get_sigma_polys(&self, domain: &MultiplicativeSubgroup<F>, k1: F, k2: F) -> (DP<F>, DP<F>, DP<F>) {
         (
             self.s_sigma_poly(1, domain, k1, k2),
             self.s_sigma_poly(2, domain, k1, k2),
@@ -218,7 +216,7 @@ impl<F: FftField + PrimeField> CompiledCircuit<F> {
         )
     }
 
-    pub fn get_s_id_polys(&self, domain: &[F], k1: F, k2: F) -> (DP<F>, DP<F>, DP<F>) {
+    pub fn get_s_id_polys(&self, domain: &MultiplicativeSubgroup<F>, k1: F, k2: F) -> (DP<F>, DP<F>, DP<F>) {
         (
             self.s_id_poly(1, domain, k1, k2),
             self.s_id_poly(2, domain, k1, k2),
@@ -226,7 +224,7 @@ impl<F: FftField + PrimeField> CompiledCircuit<F> {
         )
     }
 
-    fn s_sigma_poly(&self, col: usize, domain: &[F], k1: F, k2: F) -> DensePolynomial<F> {
+    fn s_sigma_poly(&self, col: usize, domain: &MultiplicativeSubgroup<F>, k1: F, k2: F) -> DensePolynomial<F> {
         let mut values = vec![];
         let n = self.gates.len();
 
@@ -242,10 +240,10 @@ impl<F: FftField + PrimeField> CompiledCircuit<F> {
             values.push(self.get_coset_shifter(col, k1, k2) * domain[i]);
         }
 
-        interpolate_univariate(domain, &values)
+        domain.interpolate_univariate(&values)
     }
 
-    fn s_id_poly(&self, col: usize, domain: &[F], k1: F, k2: F) -> DP<F> {
+    fn s_id_poly(&self, col: usize, domain: &MultiplicativeSubgroup<F>, k1: F, k2: F) -> DP<F> {
         let mut values = vec![];
         // let n = self.padded_len();
         let n = domain.len();
@@ -255,7 +253,7 @@ impl<F: FftField + PrimeField> CompiledCircuit<F> {
             values.push(permuted_omega);
         }
 
-        interpolate_univariate(domain, &values)
+        domain.interpolate_univariate(&values)
     }
 
     fn map_index_to_coset_value(&self, index: usize, domain: &[F], k1: F, k2: F) -> F {
@@ -277,7 +275,7 @@ impl<F: FftField + PrimeField> CompiledCircuit<F> {
         }
     }
 
-    pub fn get_public_input_poly(&self, domain: &[F]) -> DensePolynomial<F> {
+    pub fn get_public_input_poly(&self, domain: &MultiplicativeSubgroup<F>) -> DensePolynomial<F> {
         let values = self
             .get_abc_vectors(domain).0
             .iter()
@@ -291,16 +289,16 @@ impl<F: FftField + PrimeField> CompiledCircuit<F> {
             })
             .collect::<Vec<_>>();
 
-        interpolate_univariate(&domain, &values)
+        domain.interpolate_univariate(&values)
     }
 
-    fn get_abc_polys(&self, domain: &[F]) -> (DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>) {
+    fn get_abc_polys(&self, domain: &MultiplicativeSubgroup<F>) -> (DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>) {
         let (a, b, c) = self.get_abc_vectors(domain);
 
         (
-            interpolate_univariate(domain, &a),
-            interpolate_univariate(domain, &b),
-            interpolate_univariate(domain, &c),
+            domain.interpolate_univariate(&a),
+            domain.interpolate_univariate(&b),
+            domain.interpolate_univariate(&c),
         )
     }
     
@@ -437,7 +435,7 @@ mod tests {
     use ark_std::iterable::Iterable;
     use ark_test_curves::bls12_381::Fr;
     use crate::plonk::circuit::{get_test_circuit, Circuit, CircuitBuilder, CircuitGate, CompiledCircuit, CompiledGate, Input, Variable};
-    use crate::plonk::evaluation_domain::generate_multiplicative_subgroup;
+    use crate::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::prover::pick_coset_shifters;
 
     #[test]

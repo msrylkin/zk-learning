@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 use std::ops::{Add, Deref};
+use std::time::Instant;
 use ark_ff::{FftField, Field, PrimeField};
 use ark_poly::{DenseMultilinearExtension, DenseUVPolynomial, EvaluationDomain, MultilinearExtension, Polynomial, Radix2EvaluationDomain};
 use ark_poly::univariate::{DensePolynomial, SparsePolynomial};
@@ -186,10 +187,24 @@ pub fn to_f<F: Field>(vals: Vec<i64>) -> Vec<F> {
     vals.into_iter().map(|e| F::from(e)).collect()
 }
 
-pub fn interpolate_univariate<F: Field>(domain: &[F], values : &[F]) -> DensePolynomial<F> {
+fn interpolate_univariate<F: Field>(domain: &[F], values : &[F]) -> DensePolynomial<F> {
     assert_eq!(domain.len(), values.len());
 
-    generate_lagrange_basis_polys(domain)
+    let start = Instant::now();
+    let lgbase = generate_lagrange_basis_polys(domain);
+    println!("generate_lagrange_basis_polys {}", start.elapsed().as_millis());
+
+    let start = Instant::now();
+    let interpolated = interpolate_on_lagrange_basis_polys(&lgbase, values);
+    println!("interpolate_on_lagrange_basis_polys {}", start.elapsed().as_millis());
+
+    interpolated
+}
+
+pub fn interpolate_on_lagrange_basis_polys<F: Field>(polys: &[DensePolynomial<F>], values: &[F]) -> DensePolynomial<F> {
+    assert_eq!(polys.len(), values.len());
+
+    polys
         .into_iter()
         .zip(values)
         .map(|(lp, y)| lp * *y)

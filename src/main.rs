@@ -8,6 +8,7 @@ mod poly_utils;
 mod gkr;
 mod random_oracle;
 mod plonk;
+mod evaluation_domain;
 
 fn main() {
     // kzg::run_kzg();

@@ -5,11 +5,11 @@ use ark_poly::univariate::{DensePolynomial, SparsePolynomial};
 use ark_std::iterable::Iterable;
 use crate::evaluation_domain::MultiplicativeSubgroup;
 
-struct CircuitBuilder<F: FftField + PrimeField> {
-    circuit: Circuit<F>,
-    vars: HashMap<usize, Variable>,
-    last_var: usize,
-}
+// struct CircuitBuilder<F: FftField + PrimeField> {
+//     circuit: Circuit<F>,
+//     vars: HashMap<usize, Variable>,
+//     last_var: usize,
+// }
 
 type DP<F> = DensePolynomial<F>;
 
@@ -22,47 +22,47 @@ enum Input<F: FftField + PrimeField> {
 
 type Variable = (usize, usize); // (col, row)
 
-impl<F: PrimeField + FftField> CircuitBuilder<F> {
-    fn new() -> Self {
-        Self {
-            circuit: Circuit {
-                gates: Vec::new(),
-            },
-            vars: HashMap::new(),
-            last_var: 0,
-        }
-    }
-
-    fn create_var() {}
-
-    // fn create_public_var(&mut self) -> usize {
-    //     // let var_id = self.last_var;
-    //     // let col = self.circuit.gates.len() - 1;
-    //     // self.circuit.gates.push(CircuitGate {
-    //     //     left: Input::Public((col, 0)),
-    //     //     right: Input::
-    //     // });
-    //     // self.last_var += 1;
-    //     //
-    //     // var_id
-    // }
-
-    // fn add_gate(
-    //     self,
-    //     left: Input<F>,
-    //     right: Input<F>,
-    //     out: Input<F>,
-    // ) -> Self {
-    //     let circuit = self.circuit;
-    //     let mut gates = circuit.gates;
-    //
-    //
-    // }
-
-    fn mul_gate() {
-
-    }
-}
+// impl<F: PrimeField + FftField> CircuitBuilder<F> {
+//     fn new() -> Self {
+//         Self {
+//             circuit: Circuit {
+//                 gates: Vec::new(),
+//             },
+//             vars: HashMap::new(),
+//             last_var: 0,
+//         }
+//     }
+//
+//     fn create_var() {}
+//
+//     // fn create_public_var(&mut self) -> usize {
+//     //     // let var_id = self.last_var;
+//     //     // let col = self.circuit.gates.len() - 1;
+//     //     // self.circuit.gates.push(CircuitGate {
+//     //     //     left: Input::Public((col, 0)),
+//     //     //     right: Input::
+//     //     // });
+//     //     // self.last_var += 1;
+//     //     //
+//     //     // var_id
+//     // }
+//
+//     // fn add_gate(
+//     //     self,
+//     //     left: Input<F>,
+//     //     right: Input<F>,
+//     //     out: Input<F>,
+//     // ) -> Self {
+//     //     let circuit = self.circuit;
+//     //     let mut gates = circuit.gates;
+//     //
+//     //
+//     // }
+//
+//     fn mul_gate() {
+//
+//     }
+// }
 
 enum CircuitOperation {
     Mul,
@@ -117,6 +117,14 @@ pub struct Solution<F: FftField + PrimeField> {
     pub s_sigma_3: DensePolynomial<F>,
     pub pi: DensePolynomial<F>,
 }
+
+// pub struct Circuit<F: FftField + PrimeField> {
+//
+// }
+//
+// impl<F: FftField + PrimeField> CircuitBuilder<F> {
+//
+// }
 
 fn format_bool<F: Field>(b: bool) -> F {
     match b {
@@ -199,7 +207,7 @@ impl<F: FftField + PrimeField> CompiledCircuit<F> {
         let qr = domain.interpolate_univariate(&qr_values);
         let qm = domain.interpolate_univariate(&qm_values);
         let qo = domain.interpolate_univariate(&qo_values);
-        let qc = domain.interpolate_univariate( &qc_values);
+        let qc = domain.interpolate_univariate(&qc_values);
 
         (ql, qr, qm , qo, qc)
     }
@@ -329,11 +337,132 @@ impl<F: FftField + PrimeField> CompiledCircuit<F> {
     }
 }
 
-struct Circuit<F: FftField + PrimeField> {
-    gates: Vec<CircuitGate<F>>
+struct Gate<F: FftField + PrimeField> {
+    left: usize,
+    right: usize,
+    output: usize,
+    out_result: F,
+    constant: F,
 }
 
-impl<F: FftField + PrimeField> Circuit<F> {
+struct CircuitBuilder<F: FftField + PrimeField> {
+    // gates: Vec<CircuitGate<F>>,
+    variables: Vec<F>,
+    witness: Vec<usize>,
+    public_inputs: Vec<usize>,
+    left_indexing: Vec<usize>,
+    right_indexing: Vec<usize>,
+    out_indexing: Vec<usize>,
+    gates: Vec<Gate<F>>,
+}
+
+impl<F: FftField + PrimeField> CircuitBuilder<F> {
+    pub fn new() -> Self {
+        CircuitBuilder {
+            variables: vec![F::zero()],
+            witness: vec![],
+            public_inputs: vec![],
+            left_indexing: vec![],
+            right_indexing: vec![],
+            out_indexing: vec![],
+            gates: vec![],
+        }
+    }
+
+    fn get_zero_var_index(&self) -> usize {
+        0
+    }
+
+    pub fn add_witness(&mut self, e: F) -> usize {
+        let index = self.add_variable(e);
+        self.witness.push(index);
+        index
+    }
+
+    pub fn add_public_input(&mut self, e: F) -> usize {
+        let index = self.add_variable(e);
+        self.public_inputs.push(index);
+        index
+    }
+
+    pub fn make_public(&mut self, var_i: usize) {
+        self.public_inputs.push(var_i);
+    }
+
+    pub fn multiplication_gate(&mut self, left: usize, right: usize) -> usize {
+        let left_var = self.variables[left];
+        let right_var = self.variables[right];
+
+        let out_result = left_var * right_var;
+        let output = self.add_variable(out_result);
+
+        self.gates.push(Gate {
+            left,
+            right,
+            output,
+            out_result,
+            constant: F::zero(),
+        });
+
+        output
+    }
+
+    pub fn addition_gate(&mut self, left: usize, right: usize) -> usize {
+        let left_var = self.variables[left];
+        let right_var = self.variables[right];
+
+        let out_result = left_var + right_var;
+        let output = self.add_variable(out_result);
+
+        self.gates.push(Gate {
+            left,
+            right,
+            output,
+            out_result,
+            constant: F::zero(),
+        });
+
+        output
+    }
+
+    pub fn constant_var(&mut self, e: F) -> usize {
+        let const_i = self.add_variable(e);
+
+        self.gates.push(Gate {
+            left: const_i,
+            right: self.get_zero_var_index(),
+            output: self.get_zero_var_index(),
+            out_result: F::zero(),
+            constant: -e,
+        });
+
+        self.gates.len() - 1
+    }
+
+    fn add_variable(&mut self, e: F) -> usize {
+        self.variables.push(e);
+
+        self.variables.len()
+    }
+}
+
+struct CircuitDescription {
+    public_inputs: usize,
+
+}
+
+fn build_test_circuit<F: FftField + PrimeField>() {
+    let mut circuit_builder = CircuitBuilder::new();
+
+    let a = circuit_builder.constant_var(F::from(9));
+    let b = circuit_builder.constant_var(F::from(82));
+    circuit_builder.make_public(a);
+
+    let mul_result_1 = circuit_builder.multiplication_gate(a, b);
+    let mul_result_2 = circuit_builder.multiplication_gate(mul_result_1, mul_result_1);
+    let add_result = circuit_builder.addition_gate(mul_result_2, b);
+
+    circuit_builder.make_public(add_result);
 }
 
 pub fn get_test_circuit<F: FftField + PrimeField>() -> CompiledCircuit<F> {
@@ -434,7 +563,7 @@ mod tests {
     use ark_poly::Polynomial;
     use ark_std::iterable::Iterable;
     use ark_test_curves::bls12_381::Fr;
-    use crate::plonk::circuit::{get_test_circuit, Circuit, CircuitBuilder, CircuitGate, CompiledCircuit, CompiledGate, Input, Variable};
+    use crate::plonk::circuit::{get_test_circuit, CircuitGate, CompiledCircuit, CompiledGate, Input, Variable};
     use crate::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::prover::pick_coset_shifters;
 

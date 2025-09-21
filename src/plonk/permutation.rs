@@ -203,7 +203,7 @@ mod tests {
     fn test_hash_permutation_poly() {
         // return;
         let test_circuit = get_test_circuit();
-        let domain = generate_multiplicative_subgroup::<{ 1u64 << 8 }, Fr>();
+        let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
         println!("1");
         let Zh = domain.get_vanishing_polynomial();
         let Zh = DensePolynomial::from(Zh);

@@ -73,12 +73,12 @@ pub fn verify<P: Pairing>(
             },
             MultipointOpening {
                 opening_point: &(zeta * omega),
+                commitments: &[proof.commitments.z],
                 batch_opening: &BatchOpening::new(
                     vec![proof.openings.z_shifted],
                     proof.opening_proofs.w_zeta_omega,
                 ),
                 linearization_scalar: &P::ScalarField::one(),
-                commitments: &[proof.commitments.z],
             },
         ],
         &u,

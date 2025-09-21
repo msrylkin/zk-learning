@@ -60,6 +60,12 @@ impl<'a, F: PrimeField> IntoIterator for &'a MultiplicativeSubgroup<F> {
     }
 }
 
+// impl<'a, F: PrimeField> Into<&'a [F]> for &'a MultiplicativeSubgroup<F> {
+//     fn into(self) -> &'a [F] {
+//         self.subgroup.as_slice()
+//     }
+// }
+
 pub fn generate_multiplicative_subgroup<const N: u64, F: PrimeField>() -> MultiplicativeSubgroup<F> {
     let subgroup_order = N;
     let field_multiplicative_order = F::zero() - F::one();

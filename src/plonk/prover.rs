@@ -22,7 +22,6 @@ pub fn prove<P: Pairing>(
     let (k1, k2) = pick_coset_shifters(&domain);
     let Zh = domain.get_vanishing_polynomial();
 
-    // let solution = circuit.get_solution(&domain, k1, k2);
     let solution = blind_solution(solution, &Zh);
 
     let lagrange_1 = domain.lagrange_polys().first().unwrap();
@@ -653,12 +652,9 @@ mod tests {
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 5 }, Fr>();
         let test_circuit = get_test_circuit(&domain);
         let solution = get_test_solution(&domain);
-        let omega = domain.generator();
         let Zh = domain.get_vanishing_polynomial();
         let zeta = generate_zeta();
-        let (k1, k2) = pick_coset_shifters(&domain);
         let (beta, gamma) = generate_beta_gamma();
-        // let solution = test_circuit.get_solution(&domain, k1, k2);
         let solution = blind_solution(solution, &Zh);
         let perm_argument = PermutationArgument::new(&domain, &beta, &gamma, &test_circuit, &solution);
         let z = perm_argument.z_poly();

@@ -4,66 +4,13 @@ use ark_poly::Radix2EvaluationDomain;
 use ark_poly::univariate::{DensePolynomial, SparsePolynomial};
 use ark_std::iterable::Iterable;
 use ark_std::Zero;
-use ark_test_curves::bls12_381::Fr;
 use crate::evaluation_domain::MultiplicativeSubgroup;
 use crate::plonk::prover::pick_coset_shifters;
-// struct CircuitBuilder<F: FftField + PrimeField> {
-//     circuit: Circuit<F>,
-//     vars: HashMap<usize, Variable>,
-//     last_var: usize,
-// }
-
-// type DP<F> = DensePolynomial<F>;
-
 
 enum CircuitOperation {
     Mul,
     Add,
 }
-
-struct CompiledGateOld<F: FftField + PrimeField> {
-    left: F,
-    right: F,
-    output: F,
-    ql: bool,
-    qr: bool,
-    qm: bool,
-    qo: bool,
-    qc: F,
-}
-
-pub struct CompiledCircuitOld<F: FftField + PrimeField> {
-    gates: Vec<CompiledGateOld<F>>,
-    sigma: Vec<usize>,
-    public_inputs_count: usize,
-}
-
-#[derive(Clone, Debug)]
-pub struct SolutionOld<F: FftField + PrimeField> {
-    pub a: DensePolynomial<F>,
-    pub b: DensePolynomial<F>,
-    pub c: DensePolynomial<F>,
-    pub ql: DensePolynomial<F>,
-    pub qr: DensePolynomial<F>,
-    pub qm: DensePolynomial<F>,
-    pub qo: DensePolynomial<F>,
-    pub qc: DensePolynomial<F>,
-    pub sid_1: DensePolynomial<F>,
-    pub sid_2: DensePolynomial<F>,
-    pub sid_3: DensePolynomial<F>,
-    pub s_sigma_1: DensePolynomial<F>,
-    pub s_sigma_2: DensePolynomial<F>,
-    pub s_sigma_3: DensePolynomial<F>,
-    pub pi: DensePolynomial<F>,
-}
-
-// pub struct Circuit<F: FftField + PrimeField> {
-//
-// }
-//
-// impl<F: FftField + PrimeField> CircuitBuilder<F> {
-//
-// }
 
 fn format_bool<F: Field>(b: bool) -> F {
     match b {
@@ -72,244 +19,19 @@ fn format_bool<F: Field>(b: bool) -> F {
     }
 }
 
-fn compile_gates_to_circuit<F: FftField + PrimeField>(
-    public_inputs_count: usize,
-    gates: &[CompiledGate<F>],
-) {
-
-}
-
-impl<F: FftField + PrimeField> CompiledCircuitOld<F> {
-    pub fn get_abc_vectors(&self, domain: &[F]) -> (Vec<F>, Vec<F>, Vec<F>) {
-        let mut a = vec![];
-        let mut b = vec![];
-        let mut c = vec![];
-
-        for gate in &self.gates {
-            a.push(gate.left);
-            b.push(gate.right);
-            c.push(gate.output);
-        }
-
-        for _ in self.gates.len()..domain.len() {
-            a.push(F::zero());
-            b.push(F::zero());
-            c.push(F::zero());
-        }
-
-        (a, b, c)
-    }
-
-    pub fn get_sigma(&self) -> Vec<usize> {
-        self.sigma.clone()
-    }
-
-    pub fn get_selectors(&self, domain: &MultiplicativeSubgroup<F>) -> (
-        DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>
-    ) {
-        let mut ql_values = vec![];
-        let mut qr_values = vec![];
-        let mut qm_values = vec![];
-        let mut qo_values = vec![];
-        let mut qc_values = vec![];
-
-        for gate in &self.gates {
-            ql_values.push(format_bool(gate.ql));
-            qr_values.push(format_bool(gate.qr));
-            qm_values.push(format_bool(gate.qm));
-            qo_values.push(-format_bool::<F>(gate.qo));
-            qc_values.push(gate.qc);
-        }
-
-        // let padded_n = self.padded_len();
-        let padded_n = domain.len();
-        for _ in 0..padded_n - self.gates.len() {
-            ql_values.push(format_bool(false));
-            qr_values.push(format_bool(false));
-            qm_values.push(format_bool(false));
-            qo_values.push(format_bool(false));
-            qc_values.push(F::zero());
-        }
-
-        let ql = domain.interpolate_univariate(&ql_values);
-        let qr = domain.interpolate_univariate(&qr_values);
-        let qm = domain.interpolate_univariate(&qm_values);
-        let qo = domain.interpolate_univariate(&qo_values);
-        let qc = domain.interpolate_univariate(&qc_values);
-
-        (ql, qr, qm , qo, qc)
-    }
-
-    fn sigma(&self, from: usize) -> usize {
-        self.sigma[from]
-    }
-
-    pub fn get_sigma_polys(&self, domain: &MultiplicativeSubgroup<F>, k1: F, k2: F) -> (DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>) {
-        (
-            self.s_sigma_poly(1, domain, k1, k2),
-            self.s_sigma_poly(2, domain, k1, k2),
-            self.s_sigma_poly(3, domain, k1, k2),
-        )
-    }
-
-    pub fn get_s_id_polys(&self, domain: &MultiplicativeSubgroup<F>, k1: F, k2: F) -> (DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>) {
-        (
-            self.s_id_poly(1, domain, k1, k2),
-            self.s_id_poly(2, domain, k1, k2),
-            self.s_id_poly(3, domain, k1, k2),
-        )
-    }
-
-    fn s_sigma_poly(&self, col: usize, domain: &MultiplicativeSubgroup<F>, k1: F, k2: F) -> DensePolynomial<F> {
-        let mut values = vec![];
-        let n = self.gates.len();
-
-        for i in 0..n {
-            let permuted_index = self.sigma((col - 1) * n + i);
-            let permuted_omega = self.map_index_to_coset_value(permuted_index, domain, k1, k2);
-            values.push(permuted_omega);
-        }
-
-        // let padded_n = self.padded_len();
-        let padded_n = domain.len();
-        for i in self.gates.len()..padded_n {
-            values.push(self.get_coset_shifter(col, k1, k2) * domain[i]);
-        }
-
-        domain.interpolate_univariate(&values)
-    }
-
-    fn s_id_poly(&self, col: usize, domain: &MultiplicativeSubgroup<F>, k1: F, k2: F) -> DensePolynomial<F> {
-        let mut values = vec![];
-        // let n = self.padded_len();
-        let n = domain.len();
-
-        for i in 0..n {
-            let permuted_omega = self.get_coset_shifter(col, k1, k2) * domain[i];
-            values.push(permuted_omega);
-        }
-
-        domain.interpolate_univariate(&values)
-    }
-
-    fn map_index_to_coset_value(&self, index: usize, domain: &[F], k1: F, k2: F) -> F {
-        let n = self.gates.len();
-
-        match index {
-            index if index < n => domain[index],
-            index if index >= n && index < 2 * n => k1 * domain[index - n],
-            _ => k2 * domain[index - 2 * n]
-        }
-    }
-
-    fn get_coset_shifter(&self, col: usize, k1: F, k2: F) -> F {
-        match col {
-            1 => F::one(),
-            2 => k1,
-            3 => k2,
-            _ => panic!("invalid col {}", col),
-        }
-    }
-
-    pub fn get_public_input_poly(&self, domain: &MultiplicativeSubgroup<F>) -> DensePolynomial<F> {
-        let values = self
-            .get_abc_vectors(domain).0
-            .iter()
-            .enumerate()
-            .map(|(i, e)| {
-                if i < self.public_inputs_count {
-                    return -*e;
-                }
-
-                F::zero()
-            })
-            .collect::<Vec<_>>();
-
-        domain.interpolate_univariate(&values)
-    }
-
-    fn get_abc_polys(&self, domain: &MultiplicativeSubgroup<F>) -> (DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>) {
-        let (a, b, c) = self.get_abc_vectors(domain);
-
-        (
-            domain.interpolate_univariate(&a),
-            domain.interpolate_univariate(&b),
-            domain.interpolate_univariate(&c),
-        )
-    }
-
-    pub fn get_solution(&self, domain: &MultiplicativeSubgroup<F>, k1: F, k2: F) -> SolutionOld<F> {
-        let (a, b, c) = self.get_abc_polys(domain);
-        let (ql, qr, qm , qo, qc) = self.get_selectors(domain);
-        let (sid_1, sid_2, sid_3) = self.get_s_id_polys(domain, k1, k2);
-        let (s_sigma_1, s_sigma_2, s_sigma_3) = self.get_sigma_polys(domain, k1, k2);
-        let pi = self.get_public_input_poly(domain);
-
-        SolutionOld {
-            a,
-            b,
-            c,
-            ql,
-            qr,
-            qm,
-            qo,
-            qc,
-            sid_1,
-            sid_2,
-            sid_3,
-            s_sigma_1,
-            s_sigma_2,
-            s_sigma_3,
-            pi,
-        }
-    }
-}
-
-// struct Gate<F: FftField + PrimeField> {
-//     left: usize,
-//     right: usize,
-//     output: usize,
-//     // out_result: F,
-//     constant: F,
-// }
 
 #[derive(Clone, Debug)]
 struct ArithmeticGate {
-        left: usize,
-        right: usize,
-        output: usize,
-        // out_result: F,
-        // constant: F,
+    left: usize,
+    right: usize,
+    output: usize,
 }
 
 #[derive(Clone, Debug)]
 enum Gate {
     Addition (ArithmeticGate),
     Multiplication (ArithmeticGate),
-    // Constant {
-    //     var_i: usize,
-    //     e: F,
-    // }
 }
-
-impl Gate {
-    pub fn execute<F: FftField + PrimeField>(&self, left: F, right: F) -> F {
-        match self {
-            Gate::Addition(_) => left + right,
-            Gate::Multiplication(_) => left * right,
-            // _ => panic!()
-        }
-    }
-}
-
-// struct CircuitBuilder<F: FftField + PrimeField> {
-//     // gates: Vec<CircuitGate<F>>,
-//     // variables: Vec<F>,
-//     variables_count: usize,
-//     witness: Vec<usize>,
-//     public_inputs: Vec<usize>,
-//     gates: Vec<Gate<F>>,
-// }
 
 #[derive(Clone, Debug)]
 struct CircuitDescription<F: FftField + PrimeField> {
@@ -320,14 +42,8 @@ struct CircuitDescription<F: FftField + PrimeField> {
     constants: Vec<(usize, F)>
 }
 
-enum VarOrConst<F> {
-    Var(usize),
-    Const(F)
-}
-
 #[derive(Debug, Clone)]
 struct CompiledGate<F: PrimeField + FftField> {
-    // left: VarOrConst<F>,
     left: usize,
     right: usize,
     out: usize,
@@ -376,11 +92,9 @@ impl<'a, F: FftField + PrimeField> CircuitCompiler<'a, F> {
         let (s_sigma_1, s_sigma_2, s_sigma_3) = self.get_sigma_polys();
 
         CompiledCircuit {
-            // circuit_description,
             domain: self.domain,
             public_inputs: self.public_inputs,
             constants: self.constants,
-            // constants: circuit_description.constants.clone(),
             ql,
             qr,
             qm,
@@ -415,7 +129,6 @@ impl<'a, F: FftField + PrimeField> CircuitCompiler<'a, F> {
             qc_values.push(gate.constant);
         }
 
-        // let padded_n = self.padded_len();
         let padded_n = self.domain.len();
         for _ in 0..padded_n - self.gates.len() {
             ql_values.push(format_bool(false));
@@ -464,7 +177,6 @@ impl<'a, F: FftField + PrimeField> CircuitCompiler<'a, F> {
             values.push(permuted_omega);
         }
 
-        // let padded_n = self.padded_len();
         let padded_n = self.domain.len();
         for i in self.gates.len()..padded_n {
             values.push(self.get_coset_shifter(col) * self.domain[i]);
@@ -475,7 +187,6 @@ impl<'a, F: FftField + PrimeField> CircuitCompiler<'a, F> {
 
     fn s_id_poly(&self, col: usize) -> DensePolynomial<F> {
         let mut values = vec![];
-        // let n = self.padded_len();
         let n = self.domain.len();
 
         for i in 0..n {
@@ -513,7 +224,6 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
 
         for pi_var_i in &self.public_inputs {
             compiled_gates.push(CompiledGate {
-                // left: VarOrConst::Var(*pi_var_i),
                 left: *pi_var_i,
                 right: 0,
                 out: 0,
@@ -529,7 +239,6 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
         for (const_i, e) in &self.constants {
             variables_map.insert(*const_i, *e);
             compiled_gates.push(CompiledGate {
-                // left: VarOrConst::Const(*e),
                 left: *const_i,
                 right: 0,
                 out: 0,
@@ -546,7 +255,6 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
             match gate {
                 Gate::Addition (gate) => {
                     compiled_gates.push(CompiledGate {
-                        // left: VarOrConst::Var(gate.left),
                         left: gate.left,
                         right: gate.right,
                         out: gate.output,
@@ -560,7 +268,6 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
                 },
                 Gate::Multiplication (gate) => {
                     compiled_gates.push(CompiledGate {
-                        // left: VarOrConst::Var(gate.left),
                         left: gate.left,
                         right: gate.right,
                         out: gate.output,
@@ -587,30 +294,9 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
             self.public_inputs.clone(),
             self.constants.clone(),
         ).compile()
-
-        // CompiledCircuit2 {
-        //     public_inputs_count: self.public_inputs.len(),
-        //     ql: DensePolynomial::zero(),
-        //     qc: DensePolynomial::zero(),
-        //     qm: DensePolynomial::zero(),
-        //     qr: DensePolynomial::zero(),
-        //     qo: DensePolynomial::zero(),
-        //     sid_1: DensePolynomial::zero(),
-        //     sid_2: DensePolynomial::zero(),
-        //     sid_3: DensePolynomial::zero(),
-        //     s_sigma_1: DensePolynomial::zero(),
-        //     s_sigma_3: DensePolynomial::zero(),
-        //     s_sigma_2: DensePolynomial::zero(),
-        //     sigma: Self::build_sigma_permutations(&compiled_gates),
-        //     gates: compiled_gates,
-        // }
     }
 
     fn build_sigma_permutations(gates: &[CompiledGate<F>]) -> Vec<usize> {
-        // let mut left_i = vec![];
-        // let mut right_i = vec![];
-        // let mut out_i = vec![];
-
         let mut items = vec![];
 
         for gate in gates {
@@ -624,12 +310,6 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
         for gate in gates {
             items.push((gate.out, 2));
         }
-
-        // let items: Vec<(usize, usize)> = (0..=2)
-        //     .flat_map(|col| {
-        //         (0..gates.len()).map(move |index| (index, col))
-        //     })
-        //     .collect();
 
         println!("items {:?}", items);
 
@@ -656,74 +336,6 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
 
         sigma
     }
-    // pub fn solve(&self, public_inputs: &[F], witness: &[F]) -> CompiledCircuit<F> {
-    //     assert_eq!(public_inputs.len(), self.public_inputs.len());
-    //     assert_eq!(witness.len(), self.witness.len());
-    //
-    //     let mut variables_map = HashMap::<usize, F>::new();
-    //     let mut compiled_gates = vec![];
-    //
-    //     for (public_input_index, value) in self.public_inputs.iter().zip(public_inputs) {
-    //         variables_map.insert(*public_input_index, *value);
-    //
-    //         // compiled_gates.push(CompiledGate {
-    //         //     left: *value,
-    //         // });
-    //     }
-    //
-    //     for (witness_index, value) in self.witness.iter().zip(witness) {
-    //         let insert_res = variables_map.insert(*witness_index, *value);
-    //
-    //         if insert_res.is_some() {
-    //             panic!("index already present");
-    //         }
-    //     }
-    //
-    //     for gate in &self.gates {
-    //         match gate {
-    //             Gate::Multiplication(gate) => {
-    //                 println!("gate {:?}", gate);
-    //                 let left = *variables_map.get(&gate.left).unwrap();
-    //                 let right = *variables_map.get(&gate.right).unwrap();
-    //
-    //                 let res = left * right;
-    //
-    //                 variables_map.insert(gate.output, res);
-    //                 compiled_gates.push(CompiledGate {
-    //                     left,
-    //                     right,
-    //                     output: res,
-    //                     ql: false,
-    //                     qr: false,
-    //                     qm: true,
-    //                     qo: true,
-    //                     qc: F::zero(),
-    //                 });
-    //             },
-    //             Gate::Addition(gate) => {
-    //                 let left = *variables_map.get(&gate.left).unwrap();
-    //                 let right = *variables_map.get(&gate.right).unwrap();
-    //
-    //                 let res = left + right;
-    //
-    //                 variables_map.insert(gate.output, res);
-    //                 compiled_gates.push(CompiledGate {
-    //                     left,
-    //                     right,
-    //                     output: res,
-    //                     ql: true,
-    //                     qr: true,
-    //                     qm: false,
-    //                     qo: true,
-    //                     qc: F::zero(),
-    //                 });
-    //             },
-    //             _ => panic!(),
-    //         }
-    //     }
-    //
-    //     panic!()
-    // }
 }
 
 struct CircuitBuilder<F: FftField + PrimeField> {
@@ -733,11 +345,6 @@ struct CircuitBuilder<F: FftField + PrimeField> {
 impl<F: FftField + PrimeField> CircuitBuilder<F> {
     pub fn new() -> Self {
         CircuitBuilder {
-            // variables: vec![F::zero()],
-            // variables_count: 1, // reserved for zero
-            // witness: vec![],
-            // public_inputs: vec![],
-            // gates: vec![],
             circuit_description: CircuitDescription {
                 variables_count: 1, // reserved for zero
                 witness: vec![],
@@ -769,19 +376,8 @@ impl<F: FftField + PrimeField> CircuitBuilder<F> {
     }
 
     pub fn multiplication_gate(&mut self, left: usize, right: usize) -> usize {
-        // let left_var = self.variables[left];
-        // let right_var = self.variables[right];
-
-        // let out_result = left_var * right_var;
         let output = self.add_variable();
 
-        // self.gates.push(Gate {
-        //     left,
-        //     right,
-        //     output,
-        //     // out_result,
-        //     constant: F::zero(),
-        // });
         self.circuit_description.gates.push(Gate::Multiplication(ArithmeticGate {
             left,
             right,
@@ -792,19 +388,8 @@ impl<F: FftField + PrimeField> CircuitBuilder<F> {
     }
 
     pub fn addition_gate(&mut self, left: usize, right: usize) -> usize {
-        // let left_var = self.variables[left];
-        // let right_var = self.variables[right];
-        //
-        // let out_result = left_var + right_var;
         let output = self.add_variable();
 
-        // self.gates.push(Gate {
-        //     left,
-        //     right,
-        //     output,
-        //     // out_result,
-        //     constant: F::zero(),
-        // });
         self.circuit_description.gates.push(Gate::Addition(ArithmeticGate {
             left,
             right,
@@ -818,15 +403,6 @@ impl<F: FftField + PrimeField> CircuitBuilder<F> {
         let const_i = self.add_variable();
 
         self.circuit_description.constants.push((const_i, e));
-
-        // self.gates.push(Gate {
-        //     left: const_i,
-        //     right: self.get_zero_var_index(),
-        //     output: self.get_zero_var_index(),
-        //     out_result: F::zero(),
-        //     constant: -e,
-        // });
-        // self.circuit_description.gates.push(Gate::Constant{ var_i: const_i, e });
 
         const_i
     }
@@ -844,19 +420,11 @@ impl<F: FftField + PrimeField> CircuitBuilder<F> {
     }
 }
 
-// struct CircuitDescription<F: FftField + PrimeField> {
-//     public_inputs: Vec<usize>,
-//     constants: Vec<(usize, F)>,
-//     gates: Vec<Gate<F>>,
-// }
-
 fn build_test_circuit<F: FftField + PrimeField>() -> CircuitDescription<F> {
     let mut circuit_builder = CircuitBuilder::new();
 
-    // let a = circuit_builder.constant_var(F::from(9));
     let a = circuit_builder.add_variable();
     let b = circuit_builder.constant_var(F::from(82));
-    // let b = circuit_builder.add_variable();
     circuit_builder.make_public(a);
 
     let mul_result_1 = circuit_builder.multiplication_gate(a, b);
@@ -869,7 +437,6 @@ fn build_test_circuit<F: FftField + PrimeField>() -> CircuitDescription<F> {
 }
 
 pub struct CompiledCircuit<'a, F: FftField + PrimeField> {
-    // circuit_description: CircuitDescription<F>,
     domain: &'a MultiplicativeSubgroup<F>,
     public_inputs_count: usize,
     public_inputs: Vec<usize>,
@@ -895,7 +462,6 @@ pub struct PublicInput<F: FftField + PrimeField> {
 }
 
 pub struct Solution<F: FftField + PrimeField> {
-    // domain: &'a MultiplicativeSubgroup<F>,
     pub solution_gates: Vec<GateSolution<F>>,
     pub a: DensePolynomial<F>,
     pub b: DensePolynomial<F>,
@@ -965,9 +531,8 @@ fn pad_up_to_len<F: Field>(mut vec: Vec<F>, len: usize) -> Vec<F> {
 }
 
 impl<'a, F: FftField + PrimeField> CompiledCircuit<'a, F> {
-    pub fn solve(&self, public_input: &[F], witness: &[F]) -> Solution<F> {
+    pub fn solve(&self, public_input: &[F], _witness: &[F]) -> Solution<F> {
         assert_eq!(public_input.len(), self.public_inputs_count);
-        // assert_eq!()
 
         let mut solution_gates = vec![];
         let mut variables_map = HashMap::new();
@@ -990,10 +555,7 @@ impl<'a, F: FftField + PrimeField> CompiledCircuit<'a, F> {
             variables_map.insert(*const_i, *value);
         }
 
-        println!("vars map {:?}", variables_map);
-
         for gate in &self.gates {
-            println!("gate {:?}", gate);
             let left = *variables_map.get(&gate.left).unwrap();
             let right = *variables_map.get(&gate.right).unwrap();
 
@@ -1034,98 +596,6 @@ pub fn get_test_solution<F: FftField + PrimeField>(domain: &MultiplicativeSubgro
     compiled_circuit.solve(&[F::from(9), F::from(544726)], &[])
 }
 
-pub fn get_old_circuit<F: FftField + PrimeField>() -> CompiledCircuitOld<F> {
-    let circuit = CompiledCircuitOld {
-        public_inputs_count: 2,
-        sigma: vec![
-            3, // 0 -> 3,
-            17, // 1 -> 17
-            9, // 2 -> 9
-            0, // 3 -> 0
-            10, // 4 -> 10,
-            16, // 5 -> 16,
-            7, // 6 -> 7 // 0
-            8, // 7 -> 8 // 0
-            12, // 8 -> 12 // 0
-            11, // 9 -> 11
-            15, // 10 -> 15
-            2, // 11 -> 2
-            13, // 12 -> 13 // 0
-            14, // 13 -> 14 // 0
-            6, // 14 -> 6 // 0
-            4, // 15 -> 4
-            5, // 16 -> 5
-            1, // 17 -> 1
-        ],
-        gates: vec![
-            CompiledGateOld { // PI1
-                left: F::from(9),
-                right: F::from(0),
-                output: F::from(0),
-                ql: true,
-                qr: false,
-                qm: false,
-                qo: false,
-                // qc: F::from(-9),
-                qc: F::from(0),
-            },
-            CompiledGateOld { // solution
-                left: F::from(544726),
-                right: F::from(0),
-                output: F::from(0),
-                ql: true,
-                qr: false,
-                qm: false,
-                qo: false,
-                // qc: F::from(-544726),
-                qc: F::from(0),
-            },
-            CompiledGateOld { // const
-                left: F::from(82),
-                right: F::from(0),
-                output: F::from(0),
-                ql: true,
-                qr: false,
-                qm: false,
-                qo: false,
-                qc: F::from(-82),
-            },
-            CompiledGateOld { // mult gate
-                left: F::from(9),
-                right: F::from(82),
-                output: F::from(738),
-                ql: false,
-                qr: false,
-                qm: true,
-                qo: true,
-                qc: F::from(0),
-            },
-            CompiledGateOld { // mult gate
-                left: F::from(738),
-                right: F::from(738),
-                output: F::from(544644),
-                ql: false,
-                qr: false,
-                qm: true,
-                qo: true,
-                qc: F::from(0),
-            },
-            CompiledGateOld { // add gate
-                left: F::from(544644),
-                right: F::from(82),
-                output: F::from(544726),
-                ql: true,
-                qr: true,
-                qm: false,
-                qo: true,
-                qc: F::from(0),
-            },
-        ],
-    };
-
-    circuit
-}
-
 
 #[cfg(test)]
 mod tests {
@@ -1133,7 +603,7 @@ mod tests {
     use ark_std::iterable::Iterable;
     use ark_std::Zero;
     use ark_test_curves::bls12_381::Fr;
-    use crate::plonk::circuit::{build_test_circuit, format_bool, get_old_circuit, get_test_circuit, get_test_solution, ArithmeticGate, CompiledCircuit, CompiledGate, Gate};
+    use crate::plonk::circuit::{build_test_circuit, format_bool, get_test_circuit, get_test_solution, ArithmeticGate, CompiledCircuit, CompiledGate, Gate};
     use crate::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::prover::pick_coset_shifters;
 
@@ -1356,43 +826,6 @@ mod tests {
 
         for (x, y) in domain.iter().zip(sigma_3_permutations.iter()) {
             assert_eq!(test_circuit.s_sigma_3.evaluate(x), y);
-        }
-    }
-
-    #[test]
-    pub fn old_new_compare() {
-        let domain = generate_multiplicative_subgroup::<{ 1 << 4 }, Fr>();
-        let (k1, k2) = pick_coset_shifters(&domain);
-        let old_circuit = get_old_circuit();
-        let old_solution = old_circuit.get_solution(&domain, k1 ,k2);
-
-        let circuit = get_test_circuit(&domain);
-        let solution = get_test_solution(&domain);
-
-        assert_eq!(solution.a, old_solution.a);
-        assert_eq!(solution.b, old_solution.b);
-        assert_eq!(solution.c, old_solution.c);
-
-        assert_eq!(circuit.s_sigma_1, old_solution.s_sigma_1);
-        assert_eq!(circuit.s_sigma_2, old_solution.s_sigma_2);
-        assert_eq!(circuit.s_sigma_3, old_solution.s_sigma_3);
-        assert_eq!(circuit.sid_1, old_solution.sid_1);
-        assert_eq!(circuit.sid_2, old_solution.sid_2);
-        assert_eq!(circuit.sid_3, old_solution.sid_3);
-        assert_eq!(circuit.ql, old_solution.ql);
-        assert_eq!(circuit.qr, old_solution.qr);
-        assert_eq!(circuit.qm, old_solution.qm);
-        assert_eq!(circuit.qo, old_solution.qo);
-        assert_eq!(circuit.qc, old_solution.qc);
-
-        assert_eq!(solution.public_input.pi, old_solution.pi);
-
-        println!("bool 1 {}", format_bool::<Fr>(true));
-        println!("bool 0 {}", format_bool::<Fr>(false));
-
-        for w in &domain {
-            println!("\nold qo {}", old_solution.qo.evaluate(w));
-            println!("new qo {}", circuit.qo.evaluate(w));
         }
     }
 }

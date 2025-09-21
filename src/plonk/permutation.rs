@@ -194,7 +194,6 @@ mod tests {
         let beta = Fr::from(43);
         let gamma = Fr::from(35);
 
-        // let solution = test_circuit.get_solution(&domain, k1, k2);
         let solution= get_test_solution(&domain);
         let permutation = PermutationArgument::new(&domain, &beta, &gamma, &test_circuit, &solution);
 
@@ -210,24 +209,18 @@ mod tests {
 
     #[test]
     fn test_hash_permutation_poly() {
-        // return;
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
 
         let test_circuit = get_test_circuit(&domain);
-        println!("1");
         let Zh = domain.get_vanishing_polynomial();
         let Zh = DensePolynomial::from(Zh);
         let (k1, k2) = pick_coset_shifters(&domain);
-        println!("2");
-
 
         let beta = Fr::from(43);
         let gamma = Fr::from(35);
 
         let solution = get_test_solution(&domain);
         let permutation = PermutationArgument::new(&domain, &beta, &gamma, &test_circuit, &solution);
-        println!("3");
-
 
         let num_poly = permutation.numerator_poly();
         let denom_poly = permutation.denominator_poly();
@@ -235,17 +228,13 @@ mod tests {
         let custom_num_poly = permutation.hash_permutation_poly(&solution.a, &test_circuit.sid_1)
             * permutation.hash_permutation_poly(&solution.b, &test_circuit.sid_2)
             * permutation.hash_permutation_poly(&solution.c, &test_circuit.sid_3);
-
-        println!("4");
-
+        
         let mut reduced_num_values = vec![];
         for w in &domain {
             reduced_num_values.push(custom_num_poly.evaluate(&w));
         }
         let reduced_num_poly = domain.interpolate_univariate(&reduced_num_values);
-
-        println!("5");
-
+        
         let custom_denom_poly = permutation.hash_permutation_poly(&solution.a, &test_circuit.s_sigma_1)
             * permutation.hash_permutation_poly(&solution.b, &test_circuit.s_sigma_2)
             * permutation.hash_permutation_poly(&solution.c, &test_circuit.s_sigma_3);
@@ -255,18 +244,13 @@ mod tests {
             reduced_denom_values.push(custom_denom_poly.evaluate(&w));
         }
         let reduced_denom_poly = domain.interpolate_univariate(&reduced_denom_values);
-
-        println!("6");
-
+        
         for w in &domain {
             assert_eq!(num_poly.evaluate(&w), reduced_num_poly.evaluate(&w));
             assert_eq!(num_poly.evaluate(&w), custom_num_poly.evaluate(&w));
             assert_eq!(denom_poly.evaluate(&w), reduced_denom_poly.evaluate(&w));
             assert_eq!(denom_poly.evaluate(&w), custom_denom_poly.evaluate(&w));
         }
-
-        println!("7");
-
 
         assert_eq!(
             num_poly,

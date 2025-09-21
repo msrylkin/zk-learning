@@ -2,7 +2,8 @@ use ark_ff::{FftField, Field, PrimeField};
 use ark_poly::Polynomial;
 use ark_poly::univariate::DensePolynomial;
 use crate::evaluation_domain::MultiplicativeSubgroup;
-use crate::plonk::circuit::{CompiledCircuit, Solution};
+use crate::plonk::circuit::{CompiledCircuit};
+use crate::plonk::circuit::solution::Solution;
 use crate::poly_utils::{const_poly};
 
 #[derive(Clone)]

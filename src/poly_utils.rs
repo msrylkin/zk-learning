@@ -201,6 +201,13 @@ fn interpolate_univariate<F: Field>(domain: &[F], values : &[F]) -> DensePolynom
     interpolated
 }
 
+pub fn format_bool<F: Field>(b: bool) -> F {
+    match b {
+        true => F::one(),
+        false => F::zero(),
+    }
+}
+
 pub fn interpolate_on_lagrange_basis_polys<F: Field>(polys: &[DensePolynomial<F>], values: &[F]) -> DensePolynomial<F> {
     assert_eq!(polys.len(), values.len());
 

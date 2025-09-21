@@ -1,7 +1,7 @@
 use ark_ff::{FftField, Field, PrimeField};
 use ark_poly::DenseUVPolynomial;
 use ark_poly::univariate::{DensePolynomial, SparsePolynomial};
-use crate::plonk::circuit::Solution;
+use crate::plonk::circuit::solution::Solution;
 
 pub fn blind_solution<F: PrimeField + FftField>(
     solution: Solution<F>,

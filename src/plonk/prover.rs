@@ -14,6 +14,7 @@ use crate::poly_utils::{const_poly, split_poly};
 
 pub fn prove<P: Pairing>(
     circuit: &CompiledCircuit<P::ScalarField>,
+    solution: Solution<P::ScalarField>,
     kzg: &KZG<P>,
     domain: &MultiplicativeSubgroup<P::ScalarField>,
 ) -> Proof<P> {
@@ -21,14 +22,14 @@ pub fn prove<P: Pairing>(
     let (k1, k2) = pick_coset_shifters(&domain);
     let Zh = domain.get_vanishing_polynomial();
 
-    let solution = circuit.get_solution(&domain, k1, k2);
+    // let solution = circuit.get_solution(&domain, k1, k2);
     let solution = blind_solution(solution, &Zh);
 
     let lagrange_1 = domain.lagrange_polys().first().unwrap();
 
     let (beta, gamma) = generate_beta_gamma();
 
-    let permutation_argument = PermutationArgument::new(&domain, &beta, &gamma, &solution);
+    let permutation_argument = PermutationArgument::new(&domain, &beta, &gamma, &circuit, &solution);
     let z_poly = permutation_argument.z_poly();
     let z_poly = blind_z_poly(&z_poly, &Zh);
 
@@ -36,18 +37,19 @@ pub fn prove<P: Pairing>(
 
     let alpha = generate_alpha();
 
-    let big_t = compute_big_quotient(&solution, &z_poly, &z_shifted, &permutation_argument, &Zh, lagrange_1, &alpha);
+    let big_t = compute_big_quotient(circuit, &solution, &z_poly, &z_shifted, &permutation_argument, &Zh, lagrange_1, &alpha);
 
     let (lo_t, mid_t, hi_t) = split_poly(&big_t, domain.len());
     let (lo_t, mid_t, hi_t) = blind_splitted_t(&lo_t, &mid_t, &hi_t, domain.len());
 
     let zeta = generate_zeta();
 
-    let openings = compute_openings(&solution, &z_shifted, &zeta);
+    let openings = compute_openings(circuit, &solution, &z_shifted, &zeta);
 
     let r_poly = linearization_poly(
         &openings,
         &solution,
+        circuit,
         &permutation_argument,
         &z_poly,
         &DensePolynomial::from(Zh),
@@ -68,7 +70,7 @@ pub fn prove<P: Pairing>(
     let vi = generate_vi();
 
     let zeta_openings = kzg.batch_open(
-        &[&r_poly, &solution.a, &solution.b, &solution.c, &solution.s_sigma_1, &solution.s_sigma_2],
+        &[&r_poly, &solution.a, &solution.b, &solution.c, &circuit.s_sigma_1, &circuit.s_sigma_2],
         &zeta,
         &vi,
     );
@@ -96,12 +98,12 @@ pub fn prove<P: Pairing>(
     )
 }
 
-fn compute_gate_check_poly<F: PrimeField + FftField>(solution: &Solution<F>) -> DensePolynomial<F> {
-    &solution.a * &solution.b * &solution.qm
-        + &solution.a * &solution.ql
-        + &solution.b * &solution.qr
-        + &solution.c * &solution.qo
-        + &solution.pi + &solution.qc
+fn compute_gate_check_poly<F: PrimeField + FftField>(circuit: &CompiledCircuit<F>, solution: &Solution<F>) -> DensePolynomial<F> {
+    &solution.a * &solution.b * &circuit.qm
+        + &solution.a * &circuit.ql
+        + &solution.b * &circuit.qr
+        + &solution.c * &circuit.qo
+        + &solution.public_input.pi + &circuit.qc
 }
 
 pub fn generate_beta_gamma<F: FftField + PrimeField>() -> (F, F) {
@@ -169,6 +171,7 @@ fn shift_poly<F: Field>(poly: &DensePolynomial<F>, scalar: &F) -> DensePolynomia
 }
 
 fn compute_big_quotient<F: FftField + PrimeField>(
+    circuit: &CompiledCircuit<F>,
     solution: &Solution<F>,
     z: &DensePolynomial<F>,
     z_shifted: &DensePolynomial<F>,
@@ -177,7 +180,7 @@ fn compute_big_quotient<F: FftField + PrimeField>(
     lagrange_base_1: &DensePolynomial<F>,
     alpha: &F,
 ) -> DensePolynomial<F> {
-    let gate_check_poly = compute_gate_check_poly(&solution);
+    let gate_check_poly = compute_gate_check_poly(&circuit, &solution);
 
     let perm_numerator_poly = perm_argument.numerator_poly() * z;
     let perm_denominator_poly = perm_argument.denominator_poly() * z_shifted;
@@ -190,6 +193,7 @@ fn compute_big_quotient<F: FftField + PrimeField>(
 }
 
 fn compute_openings<F: FftField + PrimeField>(
+    circuit: &CompiledCircuit<F>,
     solution: &Solution<F>,
     z_shifted: &DensePolynomial<F>,
     zeta: &F,
@@ -198,8 +202,8 @@ fn compute_openings<F: FftField + PrimeField>(
         a: solution.a.evaluate(zeta),
         b: solution.b.evaluate(zeta),
         c: solution.c.evaluate(zeta),
-        s_sigma_1: solution.s_sigma_1.evaluate(zeta),
-        s_sigma_2: solution.s_sigma_2.evaluate(zeta),
+        s_sigma_1: circuit.s_sigma_1.evaluate(zeta),
+        s_sigma_2: circuit.s_sigma_2.evaluate(zeta),
         z_shifted: z_shifted.evaluate(zeta),
     }
 }
@@ -207,6 +211,7 @@ fn compute_openings<F: FftField + PrimeField>(
 fn linearization_poly<F: FftField + PrimeField>(
     openings: &Openings<F>,
     solution: &Solution<F>,
+    circuit: &CompiledCircuit<F>,
     permutation_argument: &PermutationArgument<F>,
     z_poly: &DensePolynomial<F>,
     Zh: &DensePolynomial<F>,
@@ -221,12 +226,12 @@ fn linearization_poly<F: FftField + PrimeField>(
     k1: F,
     k2: F,
 ) -> DensePolynomial<F> {
-    let gate_check_poly_linearized = &solution.qm * openings.a * openings.b
-        + &solution.ql * openings.a
-        + &solution.qr * openings.b
-        + &solution.qo * openings.c
-        + const_poly(solution.pi.evaluate(&zeta))
-        + &solution.qc;
+    let gate_check_poly_linearized = &circuit.qm * openings.a * openings.b
+        + &circuit.ql * openings.a
+        + &circuit.qr * openings.b
+        + &circuit.qo * openings.c
+        + const_poly(solution.public_input.pi.evaluate(&zeta))
+        + &circuit.qc;
     println!("\nlin gates {}", gate_check_poly_linearized.evaluate(&zeta));
 
     let perm_numerator_poly_linearized = z_poly * (
@@ -239,7 +244,7 @@ fn linearization_poly<F: FftField + PrimeField>(
     let sigma_a_linearized = openings.a + permutation_argument.beta() * openings.s_sigma_1 + permutation_argument.gamma();
     let sigma_b_linearized = openings.b + permutation_argument.beta() * openings.s_sigma_2 + permutation_argument.gamma();
     let sigma_c_lin_poly = const_poly(openings.c)
-        + &solution.s_sigma_3 * permutation_argument.beta()
+        + &circuit.s_sigma_3 * permutation_argument.beta()
         + const_poly(permutation_argument.gamma());
     let perm_denominator_poly_linearized = sigma_c_lin_poly * sigma_a_linearized * sigma_b_linearized * openings.z_shifted;
 
@@ -270,7 +275,7 @@ mod tests {
     use ark_test_curves::bls12_381::{Bls12_381, Fr, G1Projective};
     use crate::kzg::{setup, BatchOpening, MultipointOpening, KZG};
     use crate::plonk::blinder::{blind_solution, blind_splitted_t};
-    use crate::plonk::circuit::get_test_circuit;
+    use crate::plonk::circuit::{get_test_circuit, get_test_solution};
     use crate::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::permutation::PermutationArgument;
     use crate::plonk::proof::{Commitments, OpeningProofs, Proof};
@@ -297,21 +302,23 @@ mod tests {
 
     #[test]
     fn test_z_poly() {
-        let test_circuit = get_test_circuit();
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
+
+        let test_circuit = get_test_circuit(&domain);
+        let solution = get_test_solution(&domain);
         let (k1, k2) = pick_coset_shifters(&domain);
-        let (a, b, c) = test_circuit.get_abc_vectors(&domain);
+        // let (a, b, c) = test_circuit.get_abc_vectors(&domain);
         let (a, b, c) = (
-            domain.interpolate_univariate(&a),
-            domain.interpolate_univariate(&b),
-            domain.interpolate_univariate(&c),
+            domain.interpolate_univariate(&solution.a),
+            domain.interpolate_univariate(&solution.b),
+            domain.interpolate_univariate(&solution.c),
         );
 
         let beta = Fr::from(43);
         let gamma = Fr::from(35);
 
-        let solution = test_circuit.get_solution(&domain, k1, k2);
-        let permutation = PermutationArgument::new(&domain, &beta, &gamma, &solution);
+        // let solution = test_circuit.get_solution(&domain, k1, k2);
+        let permutation = PermutationArgument::new(&domain, &beta, &gamma, &test_circuit, &solution);
 
         let z_poly = permutation.z_poly();
 
@@ -319,8 +326,6 @@ mod tests {
         assert_eq!(z_poly.evaluate(&Fr::one()), Fr::one());
 
         let omega= domain.generator();
-        let solution = test_circuit.get_solution(&domain, k1, k2);
-        let permutation = PermutationArgument::new(&domain, &beta, &gamma, &solution);
         let num_poly = permutation.numerator_poly();
         let denom_poly = permutation.denominator_poly();
 
@@ -334,20 +339,22 @@ mod tests {
 
     #[test]
     fn compute_big_quotient_test() {
-        let test_circuit = get_test_circuit();
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
+        let test_circuit = get_test_circuit(&domain);
+        let solution = get_test_solution(&domain);
         let Zh = domain.get_vanishing_polynomial();
         let (k1, k2) = pick_coset_shifters(&domain);
         let beta = Fr::from(43);
         let gamma = Fr::from(35);
 
-        let solution = test_circuit.get_solution(&domain, k1, k2);
-        let perm_argument = PermutationArgument::new(&domain, &beta, &gamma, &solution);
+        // let solution = test_circuit.get_solution(&domain, k1, k2);
+        let perm_argument = PermutationArgument::new(&domain, &beta, &gamma, &test_circuit, &solution);
         let z = perm_argument.z_poly();
         let z_shifted = shift_poly(&z, &domain.generator());
         let alpha = Fr::from(123);
 
         let big_q = compute_big_quotient(
+            &test_circuit,
             &solution,
             &z,
             &z_shifted,
@@ -357,7 +364,7 @@ mod tests {
             &alpha,
         );
 
-        let gate_check_poly = compute_gate_check_poly(&solution);
+        let gate_check_poly = compute_gate_check_poly(&test_circuit, &solution);
 
         let z_shifted = shift_poly(&z, &domain.generator());
         let perm_numerator_poly = perm_argument.numerator_poly() * z;
@@ -394,16 +401,16 @@ mod tests {
 
     #[test]
     fn test_linearization_poly() {
-        let test_circuit = get_test_circuit();
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
+        let test_circuit = get_test_circuit(&domain);
         let omega = domain.generator();
         let Zh = domain.get_vanishing_polynomial();
         let (k1, k2) = pick_coset_shifters(&domain);
         let beta = Fr::from(43);
         let gamma = Fr::from(35);
 
-        let solution = test_circuit.get_solution(&domain, k1, k2);
-        let perm_argument = PermutationArgument::new(&domain, &beta, &gamma, &solution);
+        let solution = get_test_solution(&domain);
+        let perm_argument = PermutationArgument::new(&domain, &beta, &gamma, &test_circuit, &solution);
         let z = perm_argument.z_poly();
         let z_shifted = shift_poly(&z, &domain.generator());
         let alpha = Fr::from(123);
@@ -412,6 +419,7 @@ mod tests {
         let lagrange_base_1 = domain.lagrange_polys().first().unwrap();
 
         let big_q = compute_big_quotient(
+            &test_circuit,
             &solution,
             &z,
             &z_shifted,
@@ -422,10 +430,11 @@ mod tests {
         );
         let (lo, mid, hi) = split_poly(&big_q, domain.len());
 
-        let openings = compute_openings(&solution, &z_shifted, &zeta);
+        let openings = compute_openings(&test_circuit, &solution, &z_shifted, &zeta);
         let r_poly = linearization_poly(
             &openings,
             &solution,
+            &test_circuit,
             &perm_argument,
             &z,
             &DensePolynomial::from(Zh),
@@ -446,16 +455,17 @@ mod tests {
 
     #[test]
     fn test_prove_verify() {
-        let test_circuit = get_test_circuit();
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 4 }, Fr>();
+        let test_circuit = get_test_circuit(&domain);
+        let solution = get_test_solution(&domain);
         let omega = domain.generator();
         let Zh = domain.get_vanishing_polynomial();
         let (k1, k2) = pick_coset_shifters(&domain);
         let (beta, gamma) = generate_beta_gamma();
 
-        let solution = test_circuit.get_solution(&domain, k1, k2);
+        // let solution = test_circuit.get_solution(&domain, k1, k2);
         let solution = blind_solution(solution, &Zh);
-        let perm_argument = PermutationArgument::new(&domain, &beta, &gamma, &solution);
+        let perm_argument = PermutationArgument::new(&domain, &beta, &gamma, &test_circuit, &solution);
         let z = perm_argument.z_poly();
         let z_shifted = shift_poly(&z, &domain.generator());
         let alpha = generate_alpha();
@@ -464,6 +474,7 @@ mod tests {
         let lagrange_base_1 = domain.lagrange_polys().first().unwrap();
 
         let big_q = compute_big_quotient(
+            &test_circuit,
             &solution,
             &z,
             &z_shifted,
@@ -474,10 +485,11 @@ mod tests {
         );
         let (lo, mid, hi) = split_poly(&big_q, domain.len());
 
-        let openings = compute_openings(&solution, &z_shifted, &zeta);
+        let openings = compute_openings(&test_circuit, &solution, &z_shifted, &zeta);
         let r_poly = linearization_poly(
             &openings,
             &solution,
+            &test_circuit,
             &perm_argument,
             &z,
             &DensePolynomial::from(Zh.clone()),
@@ -501,7 +513,7 @@ mod tests {
         let u = generate_u();
 
         let zeta_openings = kzg.batch_open(
-            &[&r_poly, &solution.a, &solution.b, &solution.c, &solution.s_sigma_1, &solution.s_sigma_2],
+            &[&r_poly, &solution.a, &solution.b, &solution.c, &test_circuit.s_sigma_1, &test_circuit.s_sigma_2],
             &zeta,
             &vi,
         );
@@ -529,23 +541,23 @@ mod tests {
 
         // poly
 
-        let mut testing_poly = &solution.qm * openings.a * openings.b
-            + &solution.ql * openings.a
-            + &solution.qr * openings.b
-            + &solution.qo * openings.c
-            + const_poly(solution.pi.evaluate(&zeta))
-            + &solution.qc;
+        let mut testing_poly = &test_circuit.qm * openings.a * openings.b
+            + &test_circuit.ql * openings.a
+            + &test_circuit.qr * openings.b
+            + &test_circuit.qo * openings.c
+            + const_poly(solution.public_input.pi.evaluate(&zeta))
+            + &test_circuit.qc;
 
         let perm_numerator_poly_linearized = z.clone() * (
-            (openings.a + perm_argument.beta() * solution.sid_1.evaluate(&zeta) + perm_argument.gamma())
-                * (openings.b + perm_argument.beta() * solution.sid_2.evaluate(&zeta) + perm_argument.gamma())
-                * (openings.c + perm_argument.beta() * solution.sid_3.evaluate(&zeta) + perm_argument.gamma())
+            (openings.a + perm_argument.beta() * test_circuit.sid_1.evaluate(&zeta) + perm_argument.gamma())
+                * (openings.b + perm_argument.beta() * test_circuit.sid_2.evaluate(&zeta) + perm_argument.gamma())
+                * (openings.c + perm_argument.beta() * test_circuit.sid_3.evaluate(&zeta) + perm_argument.gamma())
         );
 
         let sigma_a_linearized = openings.a + perm_argument.beta() * openings.s_sigma_1 + perm_argument.gamma();
         let sigma_b_linearized = openings.b + perm_argument.beta() * openings.s_sigma_2 + perm_argument.gamma();
         let sigma_c_lin_poly = const_poly(openings.c)
-            + &solution.s_sigma_3 * perm_argument.beta()
+            + &test_circuit.s_sigma_3 * perm_argument.beta()
             + const_poly(perm_argument.gamma());
         let perm_denominator_poly_linearized = sigma_c_lin_poly * sigma_a_linearized * sigma_b_linearized * openings.z_shifted;
 
@@ -567,18 +579,18 @@ mod tests {
 
         let testing_open = kzg.open(&testing_poly, &zeta);
 
-        let mut D = kzg.commit(&solution.qm) * openings.a * openings.b
-            + kzg.commit(&solution.ql) * openings.a
-            + kzg.commit(&solution.qr) * openings.b
-            + kzg.commit(&solution.qo) * openings.c
-            + kzg.commit(&const_poly(solution.pi.evaluate(&zeta)))
-            + kzg.commit(&solution.qc);
+        let mut D = kzg.commit(&test_circuit.qm) * openings.a * openings.b
+            + kzg.commit(&test_circuit.ql) * openings.a
+            + kzg.commit(&test_circuit.qr) * openings.b
+            + kzg.commit(&test_circuit.qo) * openings.c
+            + kzg.commit(&const_poly(solution.public_input.pi.evaluate(&zeta)))
+            + kzg.commit(&test_circuit.qc);
 
-        D += proof.commitments.z * alpha * (openings.a + beta * solution.sid_1.evaluate(&zeta) + gamma)
-            * (openings.b + beta * solution.sid_2.evaluate(&zeta) + gamma)
-            * (openings.c + beta * solution.sid_3.evaluate(&zeta) + gamma);
+        D += proof.commitments.z * alpha * (openings.a + beta * test_circuit.sid_1.evaluate(&zeta) + gamma)
+            * (openings.b + beta * test_circuit.sid_2.evaluate(&zeta) + gamma)
+            * (openings.c + beta * test_circuit.sid_3.evaluate(&zeta) + gamma);
 
-        D -= (G1Projective::generator() * openings.c + kzg.commit(&solution.s_sigma_3) * beta + G1Projective::generator() * gamma) * alpha
+        D -= (G1Projective::generator() * openings.c + kzg.commit(&test_circuit.s_sigma_3) * beta + G1Projective::generator() * gamma) * alpha
             * (openings.a + beta * openings.s_sigma_1 + gamma)
             * (openings.b + beta * openings.s_sigma_2 + gamma) * openings.z_shifted;
 
@@ -590,20 +602,20 @@ mod tests {
                 + proof.commitments.t_hi * zeta.pow([domain.len() as u64 * 2])
         ) * Zh.evaluate(&zeta);
 
-        let mut eval = solution.qm.evaluate(&zeta) * openings.a * openings.b
-            + solution.ql.evaluate(&zeta) * openings.a
-            + solution.qr.evaluate(&zeta) * openings.b
-            + solution.qo.evaluate(&zeta) * openings.c
-            + solution.pi.evaluate(&zeta)
-            + solution.qc.evaluate(&zeta);
+        let mut eval = test_circuit.qm.evaluate(&zeta) * openings.a * openings.b
+            + test_circuit.ql.evaluate(&zeta) * openings.a
+            + test_circuit.qr.evaluate(&zeta) * openings.b
+            + test_circuit.qo.evaluate(&zeta) * openings.c
+            + solution.public_input.pi.evaluate(&zeta)
+            + test_circuit.qc.evaluate(&zeta);
 
-        eval += z.evaluate(&zeta) * alpha * (openings.a + beta * solution.sid_1.evaluate(&zeta) + gamma)
-            * (openings.b + beta * solution.sid_2.evaluate(&zeta) + gamma)
-            * (openings.c + beta * solution.sid_3.evaluate(&zeta) + gamma);
+        eval += z.evaluate(&zeta) * alpha * (openings.a + beta * test_circuit.sid_1.evaluate(&zeta) + gamma)
+            * (openings.b + beta * test_circuit.sid_2.evaluate(&zeta) + gamma)
+            * (openings.c + beta * test_circuit.sid_3.evaluate(&zeta) + gamma);
 
         eval -= (openings.a + beta * openings.s_sigma_1 + gamma)
             * (openings.b + beta * openings.s_sigma_2 + gamma)
-            * (openings.c + beta * solution.s_sigma_3.evaluate(&zeta) + gamma) * alpha * openings.z_shifted;
+            * (openings.c + beta * test_circuit.s_sigma_3.evaluate(&zeta) + gamma) * alpha * openings.z_shifted;
 
         eval += alpha.square() * (z.evaluate(&zeta) - Fr::one()) * lagrange_base_1.evaluate(&zeta);
 
@@ -638,34 +650,35 @@ mod tests {
 
     #[test]
     fn test_linearized_parts() {
-        let test_circuit = get_test_circuit();
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 5 }, Fr>();
+        let test_circuit = get_test_circuit(&domain);
+        let solution = get_test_solution(&domain);
         let omega = domain.generator();
         let Zh = domain.get_vanishing_polynomial();
         let zeta = generate_zeta();
         let (k1, k2) = pick_coset_shifters(&domain);
         let (beta, gamma) = generate_beta_gamma();
-        let solution = test_circuit.get_solution(&domain, k1, k2);
+        // let solution = test_circuit.get_solution(&domain, k1, k2);
         let solution = blind_solution(solution, &Zh);
-        let perm_argument = PermutationArgument::new(&domain, &beta, &gamma, &solution);
+        let perm_argument = PermutationArgument::new(&domain, &beta, &gamma, &test_circuit, &solution);
         let z = perm_argument.z_poly();
         let z_shifted = shift_poly(&z, &domain.generator());
 
-        let openings = compute_openings(&solution, &z_shifted, &zeta);
+        let openings = compute_openings(&test_circuit, &solution, &z_shifted, &zeta);
 
         let perm_denominator_poly = perm_argument.denominator_poly() * z_shifted;
 
         let sigma_a_linearized = openings.a + perm_argument.beta() * openings.s_sigma_1 + perm_argument.gamma();
         let sigma_b_linearized = openings.b + perm_argument.beta() * openings.s_sigma_2 + perm_argument.gamma();
         let sigma_c_lin_poly = const_poly(openings.c)
-            + &solution.s_sigma_3 * perm_argument.beta()
+            + &test_circuit.s_sigma_3 * perm_argument.beta()
             + const_poly(perm_argument.gamma());
         let perm_denominator_poly_linearized = sigma_c_lin_poly * sigma_a_linearized * sigma_b_linearized * openings.z_shifted;
 
         assert_eq!(openings.a, solution.a.evaluate(&zeta));
-        assert_eq!(openings.s_sigma_1, solution.s_sigma_1.evaluate(&zeta));
+        assert_eq!(openings.s_sigma_1, test_circuit.s_sigma_1.evaluate(&zeta));
 
-        assert_eq!(sigma_a_linearized, perm_argument.hash_permutation_poly(&solution.a, &solution.s_sigma_1).evaluate(&zeta));
+        assert_eq!(sigma_a_linearized, perm_argument.hash_permutation_poly(&solution.a, &test_circuit.s_sigma_1).evaluate(&zeta));
 
         assert_eq!(perm_denominator_poly_linearized.evaluate(&zeta), perm_denominator_poly.evaluate(&zeta));
     }

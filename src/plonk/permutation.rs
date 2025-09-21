@@ -5,21 +5,29 @@ use crate::evaluation_domain::MultiplicativeSubgroup;
 use crate::plonk::circuit::{CompiledCircuit, Solution};
 use crate::poly_utils::{const_poly};
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct PermutationArgument<'a, F: PrimeField + FftField> {
     domain: &'a MultiplicativeSubgroup<F>,
     beta: &'a F,
     gamma: &'a F,
     solution: &'a Solution<F>,
+    circuit: &'a CompiledCircuit<'a, F>,
 }
 
 impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
-    pub fn new(domain: &'a MultiplicativeSubgroup<F>, beta: &'a F, gamma: &'a F, solution: &'a Solution<F>) -> Self {
+    pub fn new(
+        domain: &'a MultiplicativeSubgroup<F>,
+        beta: &'a F,
+        gamma: &'a F,
+        circuit: &'a CompiledCircuit<F>,
+        solution: &'a Solution<F>,
+    ) -> Self {
         Self {
             domain,
             beta,
             gamma,
-            solution
+            solution,
+            circuit,
         }
     }
 
@@ -59,9 +67,9 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
         max_i: usize,
     ) -> F {
         self.permutation_product_acc(
-            &self.solution.sid_1,
-            &self.solution.sid_2,
-            &self.solution.sid_3,
+            &self.circuit.sid_1,
+            &self.circuit.sid_2,
+            &self.circuit.sid_3,
             max_i,
         )
     }
@@ -71,9 +79,9 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
         max_i: usize,
     ) -> F {
         self.permutation_product_acc(
-            &self.solution.s_sigma_1,
-            &self.solution.s_sigma_2,
-            &self.solution.s_sigma_3,
+            &self.circuit.s_sigma_1,
+            &self.circuit.s_sigma_2,
+            &self.circuit.s_sigma_3,
             max_i,
         )
     }
@@ -97,9 +105,9 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
     ) -> DensePolynomial<F> {
         let values = self.domain.iter().map(|w| {
             self.permutation_product(
-                &self.solution.s_sigma_1,
-                &self.solution.s_sigma_2,
-                &self.solution.s_sigma_3,
+                &self.circuit.s_sigma_1,
+                &self.circuit.s_sigma_2,
+                &self.circuit.s_sigma_3,
                 &w
             )
         }).collect::<Vec<_>>();
@@ -108,17 +116,17 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
     }
 
     pub fn denominator_poly(&self) -> DensePolynomial<F> {
-        self.hash_permutation_poly(&self.solution.a, &self.solution.s_sigma_1)
-            * self.hash_permutation_poly(&self.solution.b, &self.solution.s_sigma_2)
-            * self.hash_permutation_poly(&self.solution.c, &self.solution.s_sigma_3)
+        self.hash_permutation_poly(&self.solution.a, &self.circuit.s_sigma_1)
+            * self.hash_permutation_poly(&self.solution.b, &self.circuit.s_sigma_2)
+            * self.hash_permutation_poly(&self.solution.c, &self.circuit.s_sigma_3)
     }
 
     pub fn numerator_poly_old(&self) -> DensePolynomial<F> {
         let values = self.domain.iter().map(|w| {
             self.permutation_product(
-                &self.solution.sid_1,
-                &self.solution.sid_2,
-                &self.solution.sid_3,
+                &self.circuit.sid_1,
+                &self.circuit.sid_2,
+                &self.circuit.sid_3,
                 &w
             )
         }).collect::<Vec<_>>();
@@ -127,9 +135,9 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
     }
 
     pub fn numerator_poly(&self) -> DensePolynomial<F> {
-        self.hash_permutation_poly(&self.solution.a, &self.solution.sid_1)
-            * self.hash_permutation_poly(&self.solution.b, &self.solution.sid_2)
-            * self.hash_permutation_poly(&self.solution.c, &self.solution.sid_3)
+        self.hash_permutation_poly(&self.solution.a, &self.circuit.sid_1)
+            * self.hash_permutation_poly(&self.solution.b, &self.circuit.sid_2)
+            * self.hash_permutation_poly(&self.solution.c, &self.circuit.sid_3)
     }
 
     pub fn permutation_product(
@@ -172,22 +180,23 @@ mod tests {
     use ark_poly::univariate::DensePolynomial;
     use ark_std::One;
     use ark_test_curves::bls12_381::Fr;
-    use crate::plonk::circuit::get_test_circuit;
+    use crate::plonk::circuit::{get_test_circuit, get_test_solution};
     use crate::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::permutation::PermutationArgument;
     use crate::plonk::prover::{pick_coset_shifters};
 
     #[test]
     fn test_permutation_poly_acc() {
-        let test_circuit = get_test_circuit();
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
+        let test_circuit = get_test_circuit(&domain);
         let (k1, k2) = pick_coset_shifters(&domain);
 
         let beta = Fr::from(43);
         let gamma = Fr::from(35);
 
-        let solution = test_circuit.get_solution(&domain, k1, k2);
-        let permutation = PermutationArgument::new(&domain, &beta, &gamma, &solution);
+        // let solution = test_circuit.get_solution(&domain, k1, k2);
+        let solution= get_test_solution(&domain);
+        let permutation = PermutationArgument::new(&domain, &beta, &gamma, &test_circuit, &solution);
 
         let num = permutation.numerator_acc(
             domain.len(),
@@ -202,8 +211,9 @@ mod tests {
     #[test]
     fn test_hash_permutation_poly() {
         // return;
-        let test_circuit = get_test_circuit();
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
+
+        let test_circuit = get_test_circuit(&domain);
         println!("1");
         let Zh = domain.get_vanishing_polynomial();
         let Zh = DensePolynomial::from(Zh);
@@ -214,17 +224,17 @@ mod tests {
         let beta = Fr::from(43);
         let gamma = Fr::from(35);
 
-        let solution = test_circuit.get_solution(&domain, k1, k2);
-        let permutation = PermutationArgument::new(&domain, &beta, &gamma, &solution);
+        let solution = get_test_solution(&domain);
+        let permutation = PermutationArgument::new(&domain, &beta, &gamma, &test_circuit, &solution);
         println!("3");
 
 
         let num_poly = permutation.numerator_poly();
         let denom_poly = permutation.denominator_poly();
 
-        let custom_num_poly = permutation.hash_permutation_poly(&solution.a, &solution.sid_1)
-            * permutation.hash_permutation_poly(&solution.b, &solution.sid_2)
-            * permutation.hash_permutation_poly(&solution.c, &solution.sid_3);
+        let custom_num_poly = permutation.hash_permutation_poly(&solution.a, &test_circuit.sid_1)
+            * permutation.hash_permutation_poly(&solution.b, &test_circuit.sid_2)
+            * permutation.hash_permutation_poly(&solution.c, &test_circuit.sid_3);
 
         println!("4");
 
@@ -236,9 +246,9 @@ mod tests {
 
         println!("5");
 
-        let custom_denom_poly = permutation.hash_permutation_poly(&solution.a, &solution.s_sigma_1)
-            * permutation.hash_permutation_poly(&solution.b, &solution.s_sigma_2)
-            * permutation.hash_permutation_poly(&solution.c, &solution.s_sigma_3);
+        let custom_denom_poly = permutation.hash_permutation_poly(&solution.a, &test_circuit.s_sigma_1)
+            * permutation.hash_permutation_poly(&solution.b, &test_circuit.s_sigma_2)
+            * permutation.hash_permutation_poly(&solution.c, &test_circuit.s_sigma_3);
 
         let mut reduced_denom_values = vec![];
         for w in &domain {

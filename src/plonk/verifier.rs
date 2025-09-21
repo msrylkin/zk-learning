@@ -13,6 +13,7 @@ use crate::poly_utils::{const_poly};
 
 pub fn verify<P: Pairing>(
     circuit: &CompiledCircuit<P::ScalarField>,
+    public_input_poly: &DensePolynomial<P::ScalarField>,
     domain: &MultiplicativeSubgroup<P::ScalarField>,
     kzg: &KZG<P>,
     proof: Proof<P>,
@@ -31,10 +32,10 @@ pub fn verify<P: Pairing>(
 
     let (k1, k2) = pick_coset_shifters(&domain);
 
-    let solution = circuit.get_solution(&domain, k1, k2);
-    let pi = solution.pi.clone();
+    // let solution = circuit.get_solution(&domain, k1, k2);
+    // let pi = solution.pi.clone();
 
-    let pi_zeta = pi.evaluate(&zeta);
+    let pi_zeta = public_input_poly.evaluate(&zeta);
 
     let _r0 = pi_zeta
         + alpha.square() * lagrange_eval
@@ -47,7 +48,8 @@ pub fn verify<P: Pairing>(
     let D = compute_linearized_commitment(
         &kzg,
         &proof,
-        &solution,
+        circuit,
+        public_input_poly,
         beta,
         gamma,
         zeta,
@@ -64,7 +66,7 @@ pub fn verify<P: Pairing>(
         &[
             MultipointOpening {
                 opening_point: &zeta,
-                commitments: &[D, proof.commitments.a, proof.commitments.b, proof.commitments.c, kzg.commit(&solution.s_sigma_1), kzg.commit(&solution.s_sigma_2)],
+                commitments: &[D, proof.commitments.a, proof.commitments.b, proof.commitments.c, kzg.commit(&circuit.s_sigma_1), kzg.commit(&circuit.s_sigma_2)],
                 batch_opening: &BatchOpening::new(
                     vec![P::ScalarField::zero(), proof.openings.a, proof.openings.b, proof.openings.c, proof.openings.s_sigma_1, proof.openings.s_sigma_2],
                     proof.opening_proofs.w_zeta,
@@ -90,7 +92,8 @@ pub fn verify<P: Pairing>(
 pub fn compute_linearized_commitment<P: Pairing>(
     kzg: &KZG<P>,
     proof: &Proof<P>,
-    solution: &Solution<P::ScalarField>,
+    circuit: &CompiledCircuit<P::ScalarField>,
+    public_input_poly: &DensePolynomial<P::ScalarField>,
     beta: P::ScalarField,
     gamma: P::ScalarField,
     zeta: P::ScalarField,
@@ -102,18 +105,18 @@ pub fn compute_linearized_commitment<P: Pairing>(
     lagrange_1: &DensePolynomial<P::ScalarField>,
     u: P::ScalarField,
 ) -> P::G1 {
-    let mut D = kzg.commit(&solution.qm) * proof.openings.a * proof.openings.b
-        + kzg.commit(&solution.ql) * proof.openings.a
-        + kzg.commit(&solution.qr) * proof.openings.b
-        + kzg.commit(&solution.qo) * proof.openings.c
-        + kzg.commit(&const_poly(solution.pi.evaluate(&zeta)))
-        + kzg.commit(&solution.qc);
+    let mut D = kzg.commit(&circuit.qm) * proof.openings.a * proof.openings.b
+        + kzg.commit(&circuit.ql) * proof.openings.a
+        + kzg.commit(&circuit.qr) * proof.openings.b
+        + kzg.commit(&circuit.qo) * proof.openings.c
+        + kzg.commit(&const_poly(public_input_poly.evaluate(&zeta)))
+        + kzg.commit(&circuit.qc);
 
     D += proof.commitments.z * alpha * (proof.openings.a + beta * zeta + gamma)
         * (proof.openings.b + beta * zeta * k1 + gamma)
         * (proof.openings.c + beta * zeta * k2 + gamma);
 
-    D -= (P::G1::generator() * proof.openings.c + kzg.commit(&solution.s_sigma_3) * beta + P::G1::generator() * gamma) * alpha
+    D -= (P::G1::generator() * proof.openings.c + kzg.commit(&circuit.s_sigma_3) * beta + P::G1::generator() * gamma) * alpha
         * (proof.openings.a + beta * proof.openings.s_sigma_1 + gamma)
         * (proof.openings.b + beta * proof.openings.s_sigma_2 + gamma) * proof.openings.z_shifted;
 
@@ -124,48 +127,48 @@ pub fn compute_linearized_commitment<P: Pairing>(
     D
 }
 
-pub fn compute_linearized_commitment_2<P: Pairing>(
-    kzg: &KZG<P>,
-    proof: &Proof<P>,
-    solution: &Solution<P::ScalarField>,
-    beta: P::ScalarField,
-    gamma: P::ScalarField,
-    zeta: P::ScalarField,
-    alpha: P::ScalarField,
-    k1: P::ScalarField,
-    k2: P::ScalarField,
-    Zh: DensePolynomial<P::ScalarField>,
-    n: usize,
-    lagrange_1: &DensePolynomial<P::ScalarField>,
-    u: P::ScalarField,
-) -> P::G1 {
-    let gates = kzg.commit(&solution.qm) * proof.openings.a * proof.openings.b
-        + kzg.commit(&solution.ql) * proof.openings.a
-        + kzg.commit(&solution.qr) * proof.openings.b
-        + kzg.commit(&solution.qo) * proof.openings.c
-        + kzg.commit(&solution.qc);
-
-    let numerator = proof.commitments.z
-        * (
-            (proof.openings.a + beta * zeta + gamma)
-            * (proof.openings.b + beta * zeta * k1 + gamma)
-            * (proof.openings.c + beta * k2 * zeta + gamma)
-            * alpha
-            + lagrange_1.evaluate(&zeta) * alpha.square()
-            + u
-        );
-    let denominator = kzg.commit(&solution.s_sigma_3)
-        * (proof.openings.a + beta * proof.openings.s_sigma_1 + gamma)
-        * (proof.openings.b + beta * proof.openings.s_sigma_2 + gamma)
-        * alpha
-        * beta
-        * proof.openings.z_shifted;
-
-    let vanishing_t = (
-        proof.commitments.t_lo
-            + proof.commitments.t_mid * zeta.pow([n as u64])
-            + proof.commitments.t_hi * zeta.pow([2 * n as u64])
-    ) * Zh.evaluate(&zeta);
-
-    gates + (numerator - denominator) - vanishing_t
-}
+// pub fn compute_linearized_commitment_2<P: Pairing>(
+//     kzg: &KZG<P>,
+//     proof: &Proof<P>,
+//     circuit: &CompiledCircuit<P::ScalarField>,
+//     beta: P::ScalarField,
+//     gamma: P::ScalarField,
+//     zeta: P::ScalarField,
+//     alpha: P::ScalarField,
+//     k1: P::ScalarField,
+//     k2: P::ScalarField,
+//     Zh: DensePolynomial<P::ScalarField>,
+//     n: usize,
+//     lagrange_1: &DensePolynomial<P::ScalarField>,
+//     u: P::ScalarField,
+// ) -> P::G1 {
+//     let gates = kzg.commit(&solution.qm) * proof.openings.a * proof.openings.b
+//         + kzg.commit(&solution.ql) * proof.openings.a
+//         + kzg.commit(&solution.qr) * proof.openings.b
+//         + kzg.commit(&solution.qo) * proof.openings.c
+//         + kzg.commit(&solution.qc);
+//
+//     let numerator = proof.commitments.z
+//         * (
+//             (proof.openings.a + beta * zeta + gamma)
+//             * (proof.openings.b + beta * zeta * k1 + gamma)
+//             * (proof.openings.c + beta * k2 * zeta + gamma)
+//             * alpha
+//             + lagrange_1.evaluate(&zeta) * alpha.square()
+//             + u
+//         );
+//     let denominator = kzg.commit(&solution.s_sigma_3)
+//         * (proof.openings.a + beta * proof.openings.s_sigma_1 + gamma)
+//         * (proof.openings.b + beta * proof.openings.s_sigma_2 + gamma)
+//         * alpha
+//         * beta
+//         * proof.openings.z_shifted;
+//
+//     let vanishing_t = (
+//         proof.commitments.t_lo
+//             + proof.commitments.t_mid * zeta.pow([n as u64])
+//             + proof.commitments.t_hi * zeta.pow([2 * n as u64])
+//     ) * Zh.evaluate(&zeta);
+//
+//     gates + (numerator - denominator) - vanishing_t
+// }

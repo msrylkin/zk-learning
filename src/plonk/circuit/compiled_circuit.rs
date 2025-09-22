@@ -5,7 +5,7 @@ use crate::evaluation_domain::MultiplicativeSubgroup;
 use crate::plonk::circuit::{GateSolution, Operation, PublicInput};
 use crate::plonk::circuit::circuit_description::{CircuitDescription, Gate};
 use crate::plonk::circuit::solution::Solution;
-use crate::plonk::prover::pick_coset_shifters;
+use crate::plonk::domain::PlonkDomain;
 use crate::poly_utils::format_bool;
 
 fn pad_up_to_len<F: Field>(mut vec: Vec<F>, len: usize) -> Vec<F> {
@@ -28,7 +28,7 @@ struct CompiledGate<F: PrimeField + FftField> {
 }
 
 pub struct CompiledCircuit<'a, F: FftField + PrimeField> {
-    domain: &'a MultiplicativeSubgroup<F>,
+    domain: &'a PlonkDomain<'a, F>,
     public_inputs: Vec<usize>,
     constants: Vec<(usize, F)>,
     pub ql: DensePolynomial<F>,
@@ -106,16 +106,16 @@ pub struct CircuitCompiler<'a, F: FftField + PrimeField> {
     public_inputs: Vec<usize>,
     constants: Vec<(usize, F)>,
     gates: Vec<CompiledGate<F>>,
-    domain: &'a MultiplicativeSubgroup<F>,
-    k1: F,
-    k2: F,
+    domain: &'a PlonkDomain<'a, F>,
+    // k1: F,
+    // k2: F,
     sigma: Vec<usize>,
 }
 
 impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
     pub fn new(
         circuit_description: &'b CircuitDescription<F>,
-        domain: &'a MultiplicativeSubgroup<F>,
+        domain: &'a PlonkDomain<F>,
     ) -> Self {
         let mut compiled_gates = vec![];
         let mut variables_map = HashMap::new();
@@ -180,11 +180,11 @@ impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
             }
         }
 
-        let (k1, k2) = pick_coset_shifters(domain);
+        // let (k1, k2) = pick_coset_shifters(domain);
 
         Self {
-            k1,
-            k2,
+            // k1,
+            // k2,
             domain,
             sigma: Self::build_sigma_permutations(&compiled_gates),
             gates: compiled_gates,
@@ -347,16 +347,16 @@ impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
 
         match index {
             index if index < n => self.domain[index],
-            index if index >= n && index < 2 * n => self.k1 * self.domain[index - n],
-            _ => self.k2 * self.domain[index - 2 * n]
+            index if index >= n && index < 2 * n => self.domain.k1() * self.domain[index - n],
+            _ => self.domain.k2() * self.domain[index - 2 * n]
         }
     }
 
     fn get_coset_shifter(&self, col: usize) -> F {
         match col {
             1 => F::one(),
-            2 => self.k1,
-            3 => self.k2,
+            2 => self.domain.k1(),
+            3 => self.domain.k2(),
             _ => panic!("invalid col {}", col),
         }
     }
@@ -369,12 +369,14 @@ mod tests {
     use ark_test_curves::bls12_381::Fr;
     use crate::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::circuit::build_test_circuit;
+    use crate::plonk::domain::PlonkDomain;
     use crate::poly_utils::format_bool;
 
     #[test]
     pub fn test_circuit_compile() {
         let test_circuit = build_test_circuit::<Fr>();
         let domain = generate_multiplicative_subgroup::<{ 1 << 4 }, Fr>();
+        let domain = PlonkDomain::new(&domain);
         let compiled_circuit = test_circuit.compile(&domain);
 
         assert_eq!(compiled_circuit.sigma, vec![
@@ -467,6 +469,7 @@ mod tests {
     pub fn test_circuit_solve() {
         let test_circuit = build_test_circuit::<Fr>();
         let domain = generate_multiplicative_subgroup::<{ 1 << 4 }, Fr>();
+        let domain = PlonkDomain::new(&domain);
         let compiled_circuit = test_circuit.compile(&domain);
         let pi_vector = vec![Fr::from(9), Fr::from(544726)];
         let solution = compiled_circuit.solve(&pi_vector, &[]);

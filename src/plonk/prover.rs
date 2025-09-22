@@ -10,22 +10,27 @@ use crate::plonk::blinder::{blind_solution, blind_splitted_t, blind_z_poly};
 use crate::plonk::circuit::{CompiledCircuit};
 use crate::evaluation_domain::MultiplicativeSubgroup;
 use crate::plonk::circuit::solution::Solution;
+use crate::plonk::domain::PlonkDomain;
 use crate::plonk::permutation::PermutationArgument;
 use crate::plonk::proof::{Commitments, OpeningProofs, Openings, Proof};
 use crate::plonk::transcript_protocol::TranscriptProtocol;
 use crate::transcript::Transcript;
 use crate::poly_utils::{const_poly, split_poly};
 
+struct PlonkProver<'a, P: Pairing> {
+    kzg: &'a KZG<P>,
+}
+
 pub fn prove<P: Pairing>(
     circuit: &CompiledCircuit<P::ScalarField>,
     solution: Solution<P::ScalarField>,
     kzg: &KZG<P>,
-    domain: &MultiplicativeSubgroup<P::ScalarField>,
+    domain: &PlonkDomain<P::ScalarField>,
 ) -> Proof<P> {
     let omega = domain.generator();
 
     let mut transcript = TranscriptProtocol::<P>::new(omega, &solution.public_input.pi_vector);
-    let (k1, k2) = pick_coset_shifters(&domain);
+    // let (k1, k2) = pick_coset_shifters(&domain);
     let Zh = domain.get_vanishing_polynomial();
 
     let solution = blind_solution(solution, &Zh);
@@ -70,9 +75,9 @@ pub fn prove<P: Pairing>(
         &mid_t,
         &hi_t,
         domain.len(),
-        &domain,
-        k1,
-        k2,
+        // &domain,
+        // k1,
+        // k2,
     );
 
     assert_eq!(r_poly.evaluate(&zeta), P::ScalarField::zero());
@@ -117,26 +122,7 @@ fn compute_gate_check_poly<F: PrimeField + FftField>(circuit: &CompiledCircuit<F
         + &solution.public_input.pi + &circuit.qc
 }
 
-pub fn pick_coset_shifters<F: Field>(domain: &[F]) -> (F, F) {
-    let mut i = 2;
-    let n = domain.len();
-    let (k1, k2) = loop {
-        let k1 = F::from(i);
-        let k2 = k1.square();
 
-        let k1_n = k1.pow(&[n as u64]);
-        let k2_n  = k2.pow(&[n as u64]);
-        let k1_over_k2 = (k1 / k2).pow(&[n as u64]);
-
-        if !k1_n.is_one() && !k2_n.is_one() && !k1_over_k2.is_one() {
-            break (k1, k2);
-        }
-
-        i += 1;
-    };
-
-    (k1, k2)
-}
 
 fn divide_by_vanishing<F: FftField + PrimeField>(poly: &DensePolynomial<F>, Zh: &SparsePolynomial<F>) -> DensePolynomial<F> {
     let res = DenseOrSparsePolynomial::from(poly).divide_with_q_and_r(&DenseOrSparsePolynomial::from(Zh));
@@ -212,9 +198,9 @@ fn linearization_poly<F: FftField + PrimeField>(
     t_mid: &DensePolynomial<F>,
     t_hi: &DensePolynomial<F>,
     n: usize,
-    domain: &[F],
-    k1: F,
-    k2: F,
+    // domain: &[F],
+    // k1: F,
+    // k2: F,
 ) -> DensePolynomial<F> {
     let gate_check_poly_linearized = &circuit.qm * openings.a * openings.b
         + &circuit.ql * openings.a
@@ -223,11 +209,11 @@ fn linearization_poly<F: FftField + PrimeField>(
         + const_poly(solution.public_input.pi.evaluate(&zeta))
         + &circuit.qc;
 
-    let perm_numerator_poly_linearized = z_poly * (
-        (openings.a + permutation_argument.beta() * zeta + permutation_argument.gamma())
-        * (openings.b + permutation_argument.beta() * zeta * k1 + permutation_argument.gamma())
-        * (openings.c + permutation_argument.beta() * zeta * k2 + permutation_argument.gamma())
-    );
+    // let perm_numerator_poly_linearized = z_poly * (
+    //     (openings.a + permutation_argument.beta() * zeta + permutation_argument.gamma())
+    //     * (openings.b + permutation_argument.beta() * zeta * k1 + permutation_argument.gamma())
+    //     * (openings.c + permutation_argument.beta() * zeta * k2 + permutation_argument.gamma())
+    // );
     let perm_numerator_poly_linearized = z_poly * permutation_argument.numerator_poly().evaluate(&zeta);
 
     let sigma_a_linearized = openings.a + permutation_argument.beta() * openings.s_sigma_1 + permutation_argument.gamma();
@@ -266,19 +252,21 @@ mod tests {
     use crate::plonk::blinder::{blind_solution, blind_splitted_t};
     use crate::plonk::circuit::{get_test_circuit, get_test_solution};
     use crate::evaluation_domain::generate_multiplicative_subgroup;
+    use crate::plonk::domain::PlonkDomain;
     use crate::plonk::permutation::PermutationArgument;
     use crate::plonk::proof::{Commitments, OpeningProofs, Proof};
-    use crate::plonk::prover::{compute_big_quotient, compute_gate_check_poly, compute_openings, const_poly, linearization_poly, pick_coset_shifters, shift_poly};
+    use crate::plonk::prover::{compute_big_quotient, compute_gate_check_poly, compute_openings, const_poly, linearization_poly, shift_poly};
     use crate::plonk::transcript_protocol::TranscriptProtocol;
     use crate::poly_utils::{split_poly, to_f};
 
     #[test]
     fn pick_coset_shifters_test() {
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 6 }, Fr>();
-        let (k1, k2) = pick_coset_shifters(&domain);
+        let domain = PlonkDomain::new(&domain);
+        // let (k1, k2) = pick_coset_shifters(&domain);
 
-        let coset_k1 = domain.iter().map(|e| k1 * e).collect::<Vec<_>>();
-        let coset_k2 = domain.iter().map(|e| k2 * e).collect::<Vec<_>>();
+        let coset_k1 = domain.iter().map(|e| domain.k1() * e).collect::<Vec<_>>();
+        let coset_k2 = domain.iter().map(|e| domain.k2() * e).collect::<Vec<_>>();
 
         for h in &domain {
             for k1h in &coset_k1 {
@@ -293,10 +281,11 @@ mod tests {
     #[test]
     fn test_z_poly() {
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
+        let domain = PlonkDomain::new(&domain);
 
         let test_circuit = get_test_circuit(&domain);
         let solution = get_test_solution(&domain);
-        let (k1, k2) = pick_coset_shifters(&domain);
+        // let (k1, k2) = pick_coset_shifters(&domain);
         // let (a, b, c) = test_circuit.get_abc_vectors(&domain);
         let (a, b, c) = (
             domain.interpolate_univariate(&solution.a),
@@ -330,10 +319,11 @@ mod tests {
     #[test]
     fn compute_big_quotient_test() {
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
+        let domain = PlonkDomain::new(&domain);
         let test_circuit = get_test_circuit(&domain);
         let solution = get_test_solution(&domain);
         let Zh = domain.get_vanishing_polynomial();
-        let (k1, k2) = pick_coset_shifters(&domain);
+        // let (k1, k2) = pick_coset_shifters(&domain);
         let beta = Fr::from(43);
         let gamma = Fr::from(35);
 
@@ -392,10 +382,11 @@ mod tests {
     #[test]
     fn test_linearization_poly() {
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
+        let domain = PlonkDomain::new(&domain);
         let test_circuit = get_test_circuit(&domain);
         let omega = domain.generator();
         let Zh = domain.get_vanishing_polynomial();
-        let (k1, k2) = pick_coset_shifters(&domain);
+        // let (k1, k2) = pick_coset_shifters(&domain);
         let beta = Fr::from(43);
         let gamma = Fr::from(35);
 
@@ -435,9 +426,9 @@ mod tests {
             &mid,
             &hi,
             domain.len(),
-            &domain,
-            k1,
-            k2,
+            // &domain,
+            // k1,
+            // k2,
         );
 
         assert_eq!(r_poly.evaluate(&zeta), Fr::zero());
@@ -446,6 +437,7 @@ mod tests {
     #[test]
     fn test_prove_verify() {
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 4 }, Fr>();
+        let domain = PlonkDomain::new(&domain);
         let tau = Fr::from(777);
         let config = setup::<Bls12_381>(domain.len() * 2, tau);
         let kzg = KZG::new(config);
@@ -453,7 +445,7 @@ mod tests {
         let solution = get_test_solution(&domain);
         let omega = domain.generator();
         let Zh = domain.get_vanishing_polynomial();
-        let (k1, k2) = pick_coset_shifters(&domain);
+        // let (k1, k2) = pick_coset_shifters(&domain);
         let mut transcript = TranscriptProtocol::<Bls12_381>::new(omega, &solution.public_input.pi_vector);
         transcript.append_abc_commitments(kzg.commit(&solution.a).into_affine(), kzg.commit(&solution.b).into_affine(), kzg.commit(&solution.c).into_affine());
         let (beta, gamma) = transcript.get_beta_gamma();
@@ -503,9 +495,9 @@ mod tests {
             &mid,
             &hi,
             domain.len(),
-            &domain,
-            k1,
-            k2,
+            // &domain,
+            // k1,
+            // k2,
         );
 
         transcript.append_openings(&openings);
@@ -656,6 +648,7 @@ mod tests {
     #[test]
     fn test_linearized_parts() {
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 5 }, Fr>();
+        let domain = PlonkDomain::new(&domain);
         let test_circuit = get_test_circuit(&domain);
         let solution = get_test_solution(&domain);
         let Zh = domain.get_vanishing_polynomial();

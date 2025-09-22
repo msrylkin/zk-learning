@@ -6,6 +6,8 @@ mod proof;
 mod srs;
 mod verifier;
 mod transcript_protocol;
+mod protocol;
+mod domain;
 
 #[cfg(test)]
 mod tests {
@@ -13,12 +15,14 @@ mod tests {
     use crate::kzg::{setup, KZG};
     use crate::plonk::circuit::{get_test_circuit, get_test_solution};
     use crate::evaluation_domain::generate_multiplicative_subgroup;
+    use crate::plonk::domain::PlonkDomain;
     use crate::plonk::prover::prove;
     use crate::plonk::verifier::verify;
 
     #[test]
     pub fn protocol_test() {
         let domain = generate_multiplicative_subgroup::<{ 1 << 3 }, Fr>();
+        let domain = PlonkDomain::new(&domain);
         let circuit = get_test_circuit(&domain);
         let solution = get_test_solution(&domain);
         let tau = Fr::from(777);
@@ -32,7 +36,7 @@ mod tests {
             &domain,
         );
 
-        let is_valid = verify(
+        verify(
             &circuit,
             &public_input,
             &domain,

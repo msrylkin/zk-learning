@@ -183,14 +183,16 @@ mod tests {
     use ark_test_curves::bls12_381::Fr;
     use crate::plonk::circuit::{get_test_circuit, get_test_solution};
     use crate::evaluation_domain::generate_multiplicative_subgroup;
+    use crate::plonk::domain::PlonkDomain;
     use crate::plonk::permutation::PermutationArgument;
-    use crate::plonk::prover::{pick_coset_shifters};
+    // use crate::plonk::prover::{pick_coset_shifters};
 
     #[test]
     fn test_permutation_poly_acc() {
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
+        let domain = PlonkDomain::new(&domain);
         let test_circuit = get_test_circuit(&domain);
-        let (k1, k2) = pick_coset_shifters(&domain);
+        // let (k1, k2) = pick_coset_shifters(&domain);
 
         let beta = Fr::from(43);
         let gamma = Fr::from(35);
@@ -211,11 +213,12 @@ mod tests {
     #[test]
     fn test_hash_permutation_poly() {
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
+        let domain = PlonkDomain::new(&domain);
 
         let test_circuit = get_test_circuit(&domain);
         let Zh = domain.get_vanishing_polynomial();
         let Zh = DensePolynomial::from(Zh);
-        let (k1, k2) = pick_coset_shifters(&domain);
+        // let (k1, k2) = pick_coset_shifters(&domain);
 
         let beta = Fr::from(43);
         let gamma = Fr::from(35);

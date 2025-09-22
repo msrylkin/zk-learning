@@ -8,6 +8,7 @@ use crate::evaluation_domain::MultiplicativeSubgroup;
 use crate::plonk::circuit::circuit_description::CircuitDescription;
 pub(crate) use crate::plonk::circuit::compiled_circuit::CompiledCircuit;
 use crate::plonk::circuit::solution::Solution;
+use crate::plonk::domain::PlonkDomain;
 
 enum CircuitOperation {
     Mul,
@@ -49,12 +50,12 @@ pub struct GateSolution<F: FftField + PrimeField> {
     out: F,
 }
 
-pub fn get_test_circuit<F: FftField + PrimeField>(domain: &MultiplicativeSubgroup<F>) -> CompiledCircuit<F> {
+pub fn get_test_circuit<'a, F: FftField + PrimeField>(domain: &'a PlonkDomain<F>) -> CompiledCircuit<'a, F> {
     let circuit_description = build_test_circuit();
     circuit_description.compile(&domain)
 }
 
-pub fn get_test_solution<F: FftField + PrimeField>(domain: &MultiplicativeSubgroup<F>) -> Solution<F> {
+pub fn get_test_solution<F: FftField + PrimeField>(domain: &PlonkDomain<F>) -> Solution<F> {
     let compiled_circuit = get_test_circuit(domain);
     compiled_circuit.solve(&[F::from(9), F::from(544726)], &[])
 }
@@ -67,14 +68,15 @@ mod tests {
     use ark_test_curves::bls12_381::Fr;
     use crate::plonk::circuit::{get_test_circuit};
     use crate::evaluation_domain::generate_multiplicative_subgroup;
-    use crate::plonk::prover::pick_coset_shifters;
+    use crate::plonk::domain::PlonkDomain;
 
     #[test]
     pub fn test_s_id() {
         let domain = generate_multiplicative_subgroup::<{ 1 << 4 }, Fr>();
-        let (k1, k2) = pick_coset_shifters(&domain);
-        let k1_coset = domain.iter().map(|e| k1 * *e).collect::<Vec<_>>();
-        let k2_coset = domain.iter().map(|e| k2 * *e).collect::<Vec<_>>();
+        let domain = PlonkDomain::new(&domain);
+        // let (k1, k2) = pick_coset_shifters(&domain);
+        let k1_coset = domain.iter().map(|e| domain.k1() * *e).collect::<Vec<_>>();
+        let k2_coset = domain.iter().map(|e| domain.k2() * *e).collect::<Vec<_>>();
         let test_circuit = get_test_circuit(&domain);
 
         for e in &domain {
@@ -93,9 +95,10 @@ mod tests {
     #[test]
     pub fn test_sigma_poly() {
         let domain = generate_multiplicative_subgroup::<{ 1 << 3 }, Fr>();
-        let (k1, k2) = pick_coset_shifters(&domain);
-        let k1_coset = domain.iter().map(|e| k1 * *e).collect::<Vec<_>>();
-        let k2_coset = domain.iter().map(|e| k2 * *e).collect::<Vec<_>>();
+        let domain = PlonkDomain::new(&domain);
+        // let (k1, k2) = pick_coset_shifters(&domain);
+        let k1_coset = domain.iter().map(|e| domain.k1() * *e).collect::<Vec<_>>();
+        let k2_coset = domain.iter().map(|e| domain.k2() * *e).collect::<Vec<_>>();
         let test_circuit = get_test_circuit(&domain);
 
         let sigma_1_permutations = [

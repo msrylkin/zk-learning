@@ -36,6 +36,7 @@ pub fn blind_splitted_t<F: FftField + PrimeField>(
     )
 }
 
+// fixed values for simplicity
 fn generate_solution_blinders<F: Field>() -> [F; 6] {
     [
         F::from(11),

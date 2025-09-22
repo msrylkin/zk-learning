@@ -2,6 +2,7 @@ use ark_ff::{FftField, PrimeField};
 use crate::evaluation_domain::MultiplicativeSubgroup;
 use crate::plonk::circuit::{CompiledCircuit};
 use crate::plonk::circuit::compiled_circuit::CircuitCompiler;
+use crate::plonk::domain::PlonkDomain;
 
 #[derive(Clone, Debug)]
 pub struct ArithmeticGate {
@@ -100,7 +101,7 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
         new_var
     }
 
-    pub fn compile<'a, 'b>(&'b self, domain: &'a MultiplicativeSubgroup<F>) -> CompiledCircuit<'a, F> {
+    pub fn compile<'a, 'b>(&'b self, domain: &'a PlonkDomain<'a, F>) -> CompiledCircuit<'a, F> {
         CircuitCompiler::new(self, domain).compile()
     }
 }

@@ -7,15 +7,16 @@ use ark_std::{One, Zero};
 use crate::kzg::{BatchOpening, MultipointOpening, KZG};
 use crate::plonk::circuit::{CompiledCircuit, PublicInput};
 use crate::evaluation_domain::MultiplicativeSubgroup;
+use crate::plonk::domain::PlonkDomain;
 use crate::plonk::proof::Proof;
-use crate::plonk::prover::{pick_coset_shifters};
+// use crate::plonk::prover::{pick_coset_shifters};
 use crate::plonk::transcript_protocol::TranscriptProtocol;
 use crate::poly_utils::{const_poly};
 
 pub fn verify<P: Pairing>(
     circuit: &CompiledCircuit<P::ScalarField>,
     public_input: &PublicInput<P::ScalarField>,
-    domain: &MultiplicativeSubgroup<P::ScalarField>,
+    domain: &PlonkDomain<P::ScalarField>,
     kzg: &KZG<P>,
     proof: Proof<P>,
 ) {
@@ -37,7 +38,7 @@ pub fn verify<P: Pairing>(
     let lagrange_1 = domain.lagrange_polys().first().unwrap();
     let lagrange_eval = lagrange_1.evaluate(&zeta);
 
-    let (k1, k2) = pick_coset_shifters(&domain);
+    // let (k1, k2) = pick_coset_shifters(&domain);
 
     // let solution = circuit.get_solution(&domain, k1, k2);
     // let pi = solution.pi.clone();
@@ -61,8 +62,8 @@ pub fn verify<P: Pairing>(
         gamma,
         zeta,
         alpha,
-        k1,
-        k2,
+        domain.k1(),
+        domain.k2(),
         DensePolynomial::from(vanishing_poly),
         domain.len(),
         lagrange_1,

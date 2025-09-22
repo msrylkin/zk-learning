@@ -36,9 +36,10 @@ fn build_test_circuit<F: FftField + PrimeField>() -> CircuitDescription<F> {
     circuit_builder
 }
 
+#[derive(Clone)]
 pub struct PublicInput<F: FftField + PrimeField> {
     pub pi: DensePolynomial<F>,
-    pi_vector: Vec<F>,
+    pub pi_vector: Vec<F>,
 }
 
 #[derive(Debug)]

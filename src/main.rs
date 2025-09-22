@@ -9,6 +9,7 @@ mod gkr;
 mod random_oracle;
 mod plonk;
 mod evaluation_domain;
+mod transcript;
 
 fn main() {
     // kzg::run_kzg();

@@ -1,29 +1,36 @@
 use ark_ec::pairing::Pairing;
-use ark_ec::PrimeGroup;
+use ark_ec::{CurveGroup, PrimeGroup};
 use ark_ff::Field;
 use ark_poly::Polynomial;
 use ark_poly::univariate::DensePolynomial;
 use ark_std::{One, Zero};
 use crate::kzg::{BatchOpening, MultipointOpening, KZG};
-use crate::plonk::circuit::{CompiledCircuit};
+use crate::plonk::circuit::{CompiledCircuit, PublicInput};
 use crate::evaluation_domain::MultiplicativeSubgroup;
 use crate::plonk::proof::Proof;
-use crate::plonk::prover::{generate_alpha, generate_beta_gamma, generate_u, generate_vi, generate_zeta, pick_coset_shifters};
+use crate::plonk::prover::{pick_coset_shifters};
+use crate::plonk::transcript_protocol::TranscriptProtocol;
 use crate::poly_utils::{const_poly};
 
 pub fn verify<P: Pairing>(
     circuit: &CompiledCircuit<P::ScalarField>,
-    public_input_poly: &DensePolynomial<P::ScalarField>,
+    public_input: &PublicInput<P::ScalarField>,
     domain: &MultiplicativeSubgroup<P::ScalarField>,
     kzg: &KZG<P>,
     proof: Proof<P>,
 ) {
-    let (beta, gamma) = generate_beta_gamma();
-    let alpha = generate_alpha::<P::ScalarField>();
-    let zeta = generate_zeta();
-    let vi = generate_vi::<P::ScalarField>();
-    let u = generate_u::<P::ScalarField>();
     let omega = domain.generator();
+
+    let (beta, gamma, alpha, zeta, vi, u) = derive_challenges(
+        omega,
+        &proof,
+        &public_input.pi_vector,
+    );
+    // let (beta, gamma) = generate_beta_gamma();
+    // let alpha = generate_alpha::<P::ScalarField>();
+    // let zeta = generate_zeta();
+    // let vi = generate_vi::<P::ScalarField>();
+    // let u = generate_u::<P::ScalarField>();
 
     let vanishing_poly = domain.get_vanishing_polynomial();
 
@@ -35,7 +42,7 @@ pub fn verify<P: Pairing>(
     // let solution = circuit.get_solution(&domain, k1, k2);
     // let pi = solution.pi.clone();
 
-    let pi_zeta = public_input_poly.evaluate(&zeta);
+    let pi_zeta = public_input.pi.evaluate(&zeta);
 
     let _r0 = pi_zeta
         + alpha.square() * lagrange_eval
@@ -49,7 +56,7 @@ pub fn verify<P: Pairing>(
         &kzg,
         &proof,
         circuit,
-        public_input_poly,
+        &public_input.pi,
         beta,
         gamma,
         zeta,
@@ -125,6 +132,28 @@ pub fn compute_linearized_commitment<P: Pairing>(
     D -= (proof.commitments.t_lo + proof.commitments.t_mid * zeta.pow([n as u64]) + proof.commitments.t_hi * zeta.pow([n as u64 * 2])) * Zh.evaluate(&zeta);
 
     D
+}
+
+fn derive_challenges<P: Pairing>(
+    omega: P::ScalarField,
+    proof: &Proof<P>,
+    public_input_vector: &[P::ScalarField],
+) -> (P::ScalarField, P::ScalarField, P::ScalarField, P::ScalarField, P::ScalarField, P::ScalarField) {
+    let mut transcript = TranscriptProtocol::<P>::new(omega, public_input_vector);
+
+    transcript.append_abc_commitments(proof.commitments.a.into_affine(), proof.commitments.b.into_affine(), proof.commitments.c.into_affine());
+    transcript.append_z_commitment(proof.commitments.z.into_affine());
+    transcript.append_t(proof.commitments.t_lo.into_affine(), proof.commitments.t_mid.into_affine(), proof.commitments.t_hi.into_affine());
+    transcript.append_openings(&proof.openings);
+    transcript.append_opening_proofs(proof.opening_proofs.w_zeta.into_affine(), proof.opening_proofs.w_zeta_omega.into_affine());
+
+    let (beta, gamma) = transcript.get_beta_gamma();
+    let alpha = transcript.get_alpha();
+    let zeta = transcript.get_zeta();
+    let vi = transcript.get_vi();
+    let u = transcript.get_u();
+
+    (beta, gamma, alpha, zeta, vi, u)
 }
 
 // pub fn compute_linearized_commitment_2<P: Pairing>(

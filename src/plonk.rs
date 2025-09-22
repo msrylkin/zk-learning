@@ -5,6 +5,7 @@ mod blinder;
 mod proof;
 mod srs;
 mod verifier;
+mod transcript_protocol;
 
 #[cfg(test)]
 mod tests {
@@ -23,7 +24,7 @@ mod tests {
         let tau = Fr::from(777);
         let config = setup::<Bls12_381>(domain.len() * 2, tau);
         let kzg = KZG::new(config);
-        let pi = solution.public_input.pi.clone();
+        let public_input = solution.public_input.clone();
         let proof = prove(
             &circuit,
             solution,
@@ -33,7 +34,7 @@ mod tests {
 
         let is_valid = verify(
             &circuit,
-            &pi,
+            &public_input,
             &domain,
             &kzg,
             proof,

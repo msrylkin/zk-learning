@@ -70,3 +70,31 @@ fn blind_poly<F: FftField>(
 ) -> DensePolynomial<F> {
     poly + DensePolynomial::from(Zh.clone()) * DensePolynomial::from_coefficients_slice(blinders)
 }
+
+#[cfg(test)]
+mod tests {
+    use ark_ff::Field;
+    use ark_poly::{DenseUVPolynomial, Polynomial};
+    use ark_poly::univariate::DensePolynomial;
+    use ark_test_curves::bls12_381::Fr;
+    use crate::evaluation_domain::generate_multiplicative_subgroup;
+    use crate::plonk::blinder::blind_splitted_t;
+    use crate::poly_utils::{split_poly, to_f};
+
+    #[test]
+    fn test_t_blinding() {
+        let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
+        let poly = DensePolynomial::from_coefficients_vec(to_f::<Fr>(vec![
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+        ]));
+        let (lo, mid, hi) = split_poly(&poly, 4);
+        let (lo, mid, hi) = blind_splitted_t(&lo, &mid, &hi, 4);
+
+        for w in &domain {
+            assert_eq!(
+                poly.evaluate(&w),
+                lo.evaluate(&w) + w.pow([4]) * mid.evaluate(&w) + w.pow([8]) * hi.evaluate(&w),
+            );
+        }
+    }
+}

@@ -28,7 +28,7 @@ struct CompiledGate<F: PrimeField + FftField> {
 }
 
 pub struct CompiledCircuit<'a, F: FftField + PrimeField> {
-    domain: &'a PlonkDomain<'a, F>,
+    domain: &'a PlonkDomain<F>,
     public_inputs: Vec<usize>,
     constants: Vec<(usize, F)>,
     pub ql: DensePolynomial<F>,
@@ -106,7 +106,7 @@ pub struct CircuitCompiler<'a, F: FftField + PrimeField> {
     public_inputs: Vec<usize>,
     constants: Vec<(usize, F)>,
     gates: Vec<CompiledGate<F>>,
-    domain: &'a PlonkDomain<'a, F>,
+    domain: &'a PlonkDomain<F>,
     // k1: F,
     // k2: F,
     sigma: Vec<usize>,
@@ -376,7 +376,7 @@ mod tests {
     pub fn test_circuit_compile() {
         let test_circuit = build_test_circuit::<Fr>();
         let domain = generate_multiplicative_subgroup::<{ 1 << 4 }, Fr>();
-        let domain = PlonkDomain::new(&domain);
+        let domain = PlonkDomain::create_from_subgroup(domain);
         let compiled_circuit = test_circuit.compile(&domain);
 
         assert_eq!(compiled_circuit.sigma, vec![
@@ -469,7 +469,7 @@ mod tests {
     pub fn test_circuit_solve() {
         let test_circuit = build_test_circuit::<Fr>();
         let domain = generate_multiplicative_subgroup::<{ 1 << 4 }, Fr>();
-        let domain = PlonkDomain::new(&domain);
+        let domain = PlonkDomain::create_from_subgroup(domain);
         let compiled_circuit = test_circuit.compile(&domain);
         let pi_vector = vec![Fr::from(9), Fr::from(544726)];
         let solution = compiled_circuit.solve(&pi_vector, &[]);

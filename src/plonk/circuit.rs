@@ -50,7 +50,7 @@ pub struct GateSolution<F: FftField + PrimeField> {
     out: F,
 }
 
-pub fn get_test_circuit<'a, F: FftField + PrimeField>(domain: &'a PlonkDomain<F>) -> CompiledCircuit<'a, F> {
+pub fn get_test_circuit<F: FftField + PrimeField>(domain: &PlonkDomain<F>) -> CompiledCircuit<'_, F> {
     let circuit_description = build_test_circuit();
     circuit_description.compile(&domain)
 }
@@ -73,7 +73,7 @@ mod tests {
     #[test]
     pub fn test_s_id() {
         let domain = generate_multiplicative_subgroup::<{ 1 << 4 }, Fr>();
-        let domain = PlonkDomain::new(&domain);
+        let domain = PlonkDomain::create_from_subgroup(domain);
         // let (k1, k2) = pick_coset_shifters(&domain);
         let k1_coset = domain.iter().map(|e| domain.k1() * *e).collect::<Vec<_>>();
         let k2_coset = domain.iter().map(|e| domain.k2() * *e).collect::<Vec<_>>();
@@ -95,7 +95,7 @@ mod tests {
     #[test]
     pub fn test_sigma_poly() {
         let domain = generate_multiplicative_subgroup::<{ 1 << 3 }, Fr>();
-        let domain = PlonkDomain::new(&domain);
+        let domain = PlonkDomain::create_from_subgroup(domain);
         // let (k1, k2) = pick_coset_shifters(&domain);
         let k1_coset = domain.iter().map(|e| domain.k1() * *e).collect::<Vec<_>>();
         let k2_coset = domain.iter().map(|e| domain.k2() * *e).collect::<Vec<_>>();

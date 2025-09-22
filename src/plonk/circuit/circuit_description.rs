@@ -101,7 +101,7 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
         new_var
     }
 
-    pub fn compile<'a, 'b>(&'b self, domain: &'a PlonkDomain<'a, F>) -> CompiledCircuit<'a, F> {
+    pub fn compile<'a, 'b>(&'b self, domain: &'a PlonkDomain<F>) -> CompiledCircuit<'a, F> {
         CircuitCompiler::new(self, domain).compile()
     }
 }

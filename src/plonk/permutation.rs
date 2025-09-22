@@ -190,9 +190,8 @@ mod tests {
     #[test]
     fn test_permutation_poly_acc() {
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
-        let domain = PlonkDomain::new(&domain);
+        let domain = PlonkDomain::create_from_subgroup(domain);
         let test_circuit = get_test_circuit(&domain);
-        // let (k1, k2) = pick_coset_shifters(&domain);
 
         let beta = Fr::from(43);
         let gamma = Fr::from(35);
@@ -213,7 +212,7 @@ mod tests {
     #[test]
     fn test_hash_permutation_poly() {
         let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
-        let domain = PlonkDomain::new(&domain);
+        let domain = PlonkDomain::create_from_subgroup(domain);
 
         let test_circuit = get_test_circuit(&domain);
         let Zh = domain.get_vanishing_polynomial();
@@ -273,5 +272,35 @@ mod tests {
             denom_poly,
             reduced_denom_poly,
         );
+    }
+
+    #[test]
+    fn test_z_poly() {
+        let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
+        let domain = PlonkDomain::create_from_subgroup(domain);
+
+        let test_circuit = get_test_circuit(&domain);
+        let solution = get_test_solution(&domain);
+
+        let beta = Fr::from(43);
+        let gamma = Fr::from(35);
+
+        let permutation = PermutationArgument::new(&domain, &beta, &gamma, &test_circuit, &solution);
+
+        let z_poly = permutation.z_poly();
+
+        assert_eq!(z_poly.evaluate(&domain[domain.len() - 1]), Fr::one());
+        assert_eq!(z_poly.evaluate(&Fr::one()), Fr::one());
+
+        let omega= domain.generator();
+        let num_poly = permutation.numerator_poly();
+        let denom_poly = permutation.denominator_poly();
+
+        for x in &domain {
+            assert_eq!(
+                z_poly.evaluate(&(omega * x)) * denom_poly.evaluate(x),
+                z_poly.evaluate(x) * num_poly.evaluate(x),
+            );
+        }
     }
 }

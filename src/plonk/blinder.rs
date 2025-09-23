@@ -1,6 +1,7 @@
 use ark_ff::{FftField, Field, PrimeField};
 use ark_poly::DenseUVPolynomial;
 use ark_poly::univariate::{DensePolynomial, SparsePolynomial};
+use crate::plonk::big_quotient_poly::BigQuotientPoly;
 use crate::plonk::circuit::solution::Solution;
 
 pub fn blind_solution<F: PrimeField + FftField>(
@@ -21,18 +22,19 @@ pub fn blind_z_poly<F: PrimeField + FftField>(z: &DensePolynomial<F>, Zh: &Spars
     blind_poly(z, Zh, &generate_z_blinders())
 }
 
-pub fn blind_splitted_t<F: FftField + PrimeField>(
-    t_lo: &DensePolynomial<F>,
-    t_mid: &DensePolynomial<F>,
-    l_hi: &DensePolynomial<F>,
+pub fn blind_big_quotient<F: PrimeField>(
+    quotient_poly: BigQuotientPoly<F>,
     n: usize,
-) -> (DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>) {
+) -> BigQuotientPoly<F> {
     let [b10, b11] = generate_t_blinders();
 
-    (
+    let (t_lo, t_mid, t_hi) = quotient_poly.to_splitted_polys();
+
+    BigQuotientPoly::create_from_splitted_parts(
         t_lo + DensePolynomial::from(SparsePolynomial::from_coefficients_slice(&[(n, b10)])),
         t_mid + DensePolynomial::from(SparsePolynomial::from_coefficients_slice(&[(0, -b10), (n, b11)])),
-        l_hi - DensePolynomial::from_coefficients_slice(&[b11]),
+        t_hi - DensePolynomial::from_coefficients_slice(&[b11]),
+        n,
     )
 }
 
@@ -78,7 +80,8 @@ mod tests {
     use ark_poly::univariate::DensePolynomial;
     use ark_test_curves::bls12_381::Fr;
     use crate::evaluation_domain::generate_multiplicative_subgroup;
-    use crate::plonk::blinder::blind_splitted_t;
+    use crate::plonk::big_quotient_poly::BigQuotientPoly;
+    use crate::plonk::blinder::blind_big_quotient;
     use crate::poly_utils::{split_poly, to_f};
 
     #[test]
@@ -88,7 +91,8 @@ mod tests {
             1, 2, 3, 4, 5, 6, 7, 8, 9, 10
         ]));
         let (lo, mid, hi) = split_poly(&poly, 4);
-        let (lo, mid, hi) = blind_splitted_t(&lo, &mid, &hi, 4);
+        let quotient_poly = BigQuotientPoly::create_from_splitted_parts(lo, mid, hi, 4);
+        let (lo, mid, hi) = blind_big_quotient(quotient_poly, 4).to_splitted_polys();
 
         for w in &domain {
             assert_eq!(

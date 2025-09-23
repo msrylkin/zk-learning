@@ -9,6 +9,7 @@ mod transcript_protocol;
 mod protocol;
 mod domain;
 mod test_utils;
+mod big_quotient_poly;
 
 #[cfg(test)]
 mod tests {

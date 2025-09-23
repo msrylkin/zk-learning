@@ -6,7 +6,8 @@ use ark_poly::univariate::{DenseOrSparsePolynomial, DensePolynomial, SparsePolyn
 use ark_std::iterable::Iterable;
 use ark_std::{One, Zero};
 use crate::kzg::{KZG};
-use crate::plonk::blinder::{blind_solution, blind_splitted_t, blind_z_poly};
+use crate::plonk::big_quotient_poly::BigQuotientPoly;
+use crate::plonk::blinder::{blind_big_quotient, blind_solution, blind_z_poly};
 use crate::plonk::circuit::{CompiledCircuit};
 use crate::plonk::circuit::solution::Solution;
 use crate::plonk::domain::PlonkDomain;
@@ -69,12 +70,12 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
 
         let big_t = self.compute_big_quotient(&solution, &z_poly, &z_shifted, &permutation_argument, &transcript);
 
-        let (lo_t, mid_t, hi_t) = split_poly(&big_t, self.domain.len());
-        let (lo_t, mid_t, hi_t) = blind_splitted_t(&lo_t, &mid_t, &hi_t, self.domain.len());
+        let big_t= blind_big_quotient(big_t, self.domain.len());
+        let (lo_t, mid_t, hi_t) = big_t.get_splitted_polys();
         let (t_lo_comm, t_mid_comm, t_hi_comm) = (
-            self.kzg.commit(&lo_t),
-            self.kzg.commit(&mid_t),
-            self.kzg.commit(&hi_t),
+            self.kzg.commit(lo_t),
+            self.kzg.commit(mid_t),
+            self.kzg.commit(hi_t),
         );
 
         transcript.append_t(t_lo_comm.into_affine(), t_mid_comm.into_affine(), t_hi_comm.into_affine());
@@ -87,9 +88,7 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
             &solution,
             &permutation_argument,
             &z_poly,
-            &lo_t,
-            &mid_t,
-            &hi_t,
+            &big_t,
             &transcript,
         );
 
@@ -133,7 +132,7 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
         z_shifted: &DensePolynomial<P::ScalarField>,
         perm_argument: &PermutationArgument<P::ScalarField>,
         transcript_protocol: &TranscriptProtocol<P>,
-    ) -> DensePolynomial<P::ScalarField> {
+    ) -> BigQuotientPoly<P::ScalarField> {
         let gate_check_poly = self.compute_gate_check_poly(&solution);
 
         let perm_numerator_poly = perm_argument.numerator_poly() * z;
@@ -141,9 +140,11 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
 
         let z_poly_m1 = (z - DensePolynomial::from_coefficients_slice(&[P::ScalarField::one()])) * &self.lagrange_1;
 
-        self.divide_by_vanishing(&gate_check_poly)
+        let t = self.divide_by_vanishing(&gate_check_poly)
             + self.divide_by_vanishing(&(perm_numerator_poly - perm_denominator_poly)) * transcript_protocol.get_alpha()
-            + self.divide_by_vanishing(&z_poly_m1) * transcript_protocol.get_alpha().square()
+            + self.divide_by_vanishing(&z_poly_m1) * transcript_protocol.get_alpha().square();
+
+        BigQuotientPoly::create_for_domain(t, self.domain.len())
     }
 
     fn divide_by_vanishing(&self, poly: &DensePolynomial<P::ScalarField>) -> DensePolynomial<P::ScalarField> {
@@ -194,9 +195,7 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
         solution: &Solution<P::ScalarField>,
         permutation_argument: &PermutationArgument<P::ScalarField>,
         z_poly: &DensePolynomial<P::ScalarField>,
-        t_lo: &DensePolynomial<P::ScalarField>,
-        t_mid: &DensePolynomial<P::ScalarField>,
-        t_hi: &DensePolynomial<P::ScalarField>,
+        big_quotient_poly: &BigQuotientPoly<P::ScalarField>,
         transcript_protocol: &TranscriptProtocol<P>,
     ) -> DensePolynomial<P::ScalarField> {
         let zeta = transcript_protocol.get_zeta();
@@ -219,11 +218,7 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
 
         let perm_start_linearized = (z_poly - const_poly(P::ScalarField::one())) * self.lagrange_1.evaluate(&zeta);
 
-        let linearized_vanishing_t = (
-            t_lo
-                + t_mid * zeta.pow([self.domain.len() as u64])
-                + t_hi * zeta.pow([self.domain.len() as u64 * 2])
-        ) * self.Zh.evaluate(&zeta);
+        let linearized_vanishing_t = big_quotient_poly.linearize_on_shifts(&zeta) * self.Zh.evaluate(&zeta);
 
         let alpha = transcript_protocol.get_alpha();
 
@@ -356,8 +351,10 @@ mod tests {
         let z_poly_m1 = (z - DensePolynomial::from_coefficients_slice(&[Fr::one()])) * lagrange_base_1;
         let alpha = transcript.get_alpha();
 
+        let restored = big_q.to_combined();
+
         assert_eq!(
-            big_q * DensePolynomial::from(Zh),
+            restored * DensePolynomial::from(Zh),
             gate_check_poly
                 + (perm_numerator_poly - perm_denominator_poly) * alpha
                 + z_poly_m1 * alpha.square()
@@ -388,7 +385,6 @@ mod tests {
             &perm_argument,
             &transcript
         );
-        let (lo, mid, hi) = split_poly(&big_q, domain.len());
 
         let openings = prover.compute_openings(&solution, &z_shifted, &transcript);
         let r_poly = prover.linearization_poly(
@@ -396,9 +392,7 @@ mod tests {
             &solution,
             &perm_argument,
             &z,
-            &lo,
-            &mid,
-            &hi,
+            &big_q,
             &transcript,
         );
 
@@ -435,7 +429,7 @@ mod tests {
             &perm_argument,
             &transcript,
         );
-        let (lo, mid, hi) = split_poly(&big_q, domain.len());
+        let (lo, mid, hi) = big_q.get_splitted_polys();
         transcript.append_t(
             kzg.commit(&lo).into_affine(),
             kzg.commit(&mid).into_affine(),
@@ -449,9 +443,7 @@ mod tests {
             &solution,
             &perm_argument,
             &z,
-            &lo,
-            &mid,
-            &hi,
+            &big_q,
             &transcript,
         );
 

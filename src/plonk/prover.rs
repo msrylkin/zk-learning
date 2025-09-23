@@ -59,7 +59,7 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
         transcript.append_abc_commitments(a_comm.into_affine(), b_comm.into_affine(), c_comm.into_affine());
         let (beta, gamma ) = transcript.get_beta_gamma();
 
-        let permutation_argument = PermutationArgument::new(&self.domain, &beta, &gamma, self.circuit, &solution);
+        let permutation_argument = PermutationArgument::new(&self.domain, beta, gamma, self.circuit, &solution);
 
         let z_poly = permutation_argument.z_poly();
         let z_poly = blind_z_poly(&z_poly, &Zh);
@@ -135,8 +135,8 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
     ) -> BigQuotientPoly<P::ScalarField> {
         let gate_check_poly = self.compute_gate_check_poly(&solution);
 
-        let perm_numerator_poly = perm_argument.numerator_poly() * z;
-        let perm_denominator_poly = perm_argument.denominator_poly() * z_shifted;
+        let perm_numerator_poly = perm_argument.numerator().combined() * z;
+        let perm_denominator_poly = perm_argument.denominator().combined() * z_shifted;
 
         let z_poly_m1 = (z - DensePolynomial::from_coefficients_slice(&[P::ScalarField::one()])) * &self.lagrange_1;
 
@@ -207,7 +207,7 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
             + const_poly(solution.public_input.pi.evaluate(&zeta))
             + &self.circuit.qc;
 
-        let perm_numerator_poly_linearized = z_poly * permutation_argument.numerator_poly().evaluate(&zeta);
+        let perm_numerator_poly_linearized = z_poly * permutation_argument.numerator().evaluate(&zeta);
 
         let sigma_a_linearized = openings.a + permutation_argument.beta() * openings.s_sigma_1 + permutation_argument.gamma();
         let sigma_b_linearized = openings.b + permutation_argument.beta() * openings.s_sigma_2 + permutation_argument.gamma();
@@ -324,7 +324,7 @@ mod tests {
         let TestEnv { kzg, domain, test_circuit, solution, transcript, Zh, .. } = prepare_test_environment(&domain);
 
         let (beta, gamma) = transcript.get_beta_gamma();
-        let perm_argument = PermutationArgument::new(&domain, &beta, &gamma, &test_circuit, &solution);
+        let perm_argument = PermutationArgument::new(&domain, beta, gamma, &test_circuit, &solution);
 
         let z = perm_argument.z_poly();
         let z_shifted = shift_poly(&z, &domain.generator());
@@ -345,8 +345,8 @@ mod tests {
 
         let gate_check_poly = prover.compute_gate_check_poly(&solution);
 
-        let perm_numerator_poly = perm_argument.numerator_poly() * z.clone();
-        let perm_denominator_poly = perm_argument.denominator_poly() * z_shifted;
+        let perm_numerator_poly = perm_argument.numerator().combined() * z.clone();
+        let perm_denominator_poly = perm_argument.denominator().combined() * z_shifted;
         let lagrange_base_1 = domain.lagrange_polys().first().unwrap();
         let z_poly_m1 = (z - DensePolynomial::from_coefficients_slice(&[Fr::one()])) * lagrange_base_1;
         let alpha = transcript.get_alpha();
@@ -367,7 +367,7 @@ mod tests {
         let TestEnv { kzg, domain, test_circuit, solution, transcript, Zh, .. } = prepare_test_environment(&domain);
 
         let (beta, gamma) = transcript.get_beta_gamma();
-        let perm_argument = PermutationArgument::new(&domain, &beta, &gamma, &test_circuit, &solution);
+        let perm_argument = PermutationArgument::new(&domain, beta, gamma, &test_circuit, &solution);
 
         let z = perm_argument.z_poly();
         let z_shifted = shift_poly(&z, &domain.generator());
@@ -408,7 +408,7 @@ mod tests {
         let (beta, gamma) = transcript.get_beta_gamma();
 
         let solution = blind_solution(solution, &Zh);
-        let perm_argument = PermutationArgument::new(&domain, &beta, &gamma, &test_circuit, &solution);
+        let perm_argument = PermutationArgument::new(&domain, beta, gamma, &test_circuit, &solution);
         let z = perm_argument.z_poly();
         transcript.append_z_commitment(kzg.commit(&z).into_affine());
         let alpha = transcript.get_alpha();
@@ -595,7 +595,7 @@ mod tests {
         let TestEnv { kzg, domain, test_circuit, solution, Zh, omega, transcript } = prepare_test_environment(&domain);
         let solution = blind_solution(solution, &Zh);
         let (beta, gamma) = transcript.get_beta_gamma();
-        let perm_argument = PermutationArgument::new(&domain, &beta, &gamma, &test_circuit, &solution);
+        let perm_argument = PermutationArgument::new(&domain, beta, gamma, &test_circuit, &solution);
         let z = perm_argument.z_poly();
         let z_shifted = shift_poly(&z, &domain.generator());
 
@@ -609,7 +609,7 @@ mod tests {
 
         let zeta = transcript.get_zeta();
 
-        let perm_denominator_poly = perm_argument.denominator_poly() * z_shifted;
+        let perm_denominator_poly = perm_argument.denominator().combined() * z_shifted;
 
         let sigma_a_linearized = openings.a + perm_argument.beta() * openings.s_sigma_1 + perm_argument.gamma();
         let sigma_b_linearized = openings.b + perm_argument.beta() * openings.s_sigma_2 + perm_argument.gamma();

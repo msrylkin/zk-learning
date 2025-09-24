@@ -27,11 +27,9 @@ pub fn shift_coefficients<F: PrimeField>(mut values: Vec<F>, n: usize) -> Vec<F>
 
 impl<F: PrimeField> BigQuotientPoly<F> {
     pub fn create_for_domain(t: DensePolynomial<F>, n: usize) -> Self {
-        println!("orig t {:?}", t);
         let (t_lo, t_mid, t_hi) = split_poly(&t, n);
 
         Self {
-            // t,
             t_lo,
             t_mid,
             t_hi,

@@ -19,7 +19,8 @@ mod tests {
     use crate::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::domain::PlonkDomain;
     use crate::plonk::prover::PlonkProver;
-    use crate::plonk::verifier::verify;
+    use crate::plonk::verifier::PlonkVerifier;
+    // use crate::plonk::verifier::verify;
 
     #[test]
     pub fn protocol_test() {
@@ -39,13 +40,16 @@ mod tests {
         );
         
         let proof = prover.prove(solution);
-
-        verify(
-            &circuit,
-            &public_input,
-            &domain,
+        
+        let verifier = PlonkVerifier::new(
             &kzg,
-            proof,
+            &domain,
+            &circuit,
+        );
+
+        verifier.verify(
+            &public_input,
+            &proof
         );
     }
 }

@@ -4,7 +4,6 @@ pub mod compiled_circuit;
 
 use ark_ff::{FftField, PrimeField};
 use ark_poly::univariate::{DensePolynomial};
-use crate::evaluation_domain::MultiplicativeSubgroup;
 use crate::plonk::circuit::circuit_description::CircuitDescription;
 pub(crate) use crate::plonk::circuit::compiled_circuit::CompiledCircuit;
 use crate::plonk::circuit::solution::Solution;

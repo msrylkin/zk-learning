@@ -209,12 +209,11 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
 
         let perm_numerator_poly_linearized = z_poly * permutation_argument.numerator().evaluate(&zeta);
 
-        let sigma_a_linearized = openings.a + permutation_argument.beta() * openings.s_sigma_1 + permutation_argument.gamma();
-        let sigma_b_linearized = openings.b + permutation_argument.beta() * openings.s_sigma_2 + permutation_argument.gamma();
-        let sigma_c_lin_poly = const_poly(openings.c)
-            + &self.circuit.s_sigma_3 * permutation_argument.beta()
-            + const_poly(permutation_argument.gamma());
-        let perm_denominator_poly_linearized = sigma_c_lin_poly * sigma_a_linearized * sigma_b_linearized * openings.z_shifted;
+        let denominator = permutation_argument.denominator();
+        let perm_denominator_poly_linearized = denominator.linearize_out_on_witness(&zeta)
+            * denominator.evaluate_left(&zeta)
+            * denominator.evaluate_right(&zeta)
+            * openings.z_shifted;
 
         let perm_start_linearized = (z_poly - const_poly(P::ScalarField::one())) * self.lagrange_1.evaluate(&zeta);
 
@@ -260,9 +259,8 @@ mod tests {
     use crate::plonk::permutation::PermutationArgument;
     use crate::plonk::proof::{Commitments, OpeningProofs, Openings, Proof};
     use crate::plonk::prover::{const_poly, shift_poly, PlonkProver};
-    use crate::plonk::test_utils::get_test_kzg;
+    use crate::plonk::test_utils::{get_test_kzg, hash_permutation_poly};
     use crate::plonk::transcript_protocol::TranscriptProtocol;
-    use crate::poly_utils::{split_poly};
 
     struct TestEnv<'a> {
         kzg: KZG<Bls12_381>,
@@ -490,16 +488,16 @@ mod tests {
             + &test_circuit.qc;
 
         let perm_numerator_poly_linearized = z.clone() * (
-            (openings.a + perm_argument.beta() * test_circuit.sid_1.evaluate(&zeta) + perm_argument.gamma())
-                * (openings.b + perm_argument.beta() * test_circuit.sid_2.evaluate(&zeta) + perm_argument.gamma())
-                * (openings.c + perm_argument.beta() * test_circuit.sid_3.evaluate(&zeta) + perm_argument.gamma())
+            (openings.a + beta * test_circuit.sid_1.evaluate(&zeta) + gamma)
+                * (openings.b + beta * test_circuit.sid_2.evaluate(&zeta) + gamma)
+                * (openings.c + beta * test_circuit.sid_3.evaluate(&zeta) + gamma)
         );
 
-        let sigma_a_linearized = openings.a + perm_argument.beta() * openings.s_sigma_1 + perm_argument.gamma();
-        let sigma_b_linearized = openings.b + perm_argument.beta() * openings.s_sigma_2 + perm_argument.gamma();
+        let sigma_a_linearized = openings.a + beta * openings.s_sigma_1 + gamma;
+        let sigma_b_linearized = openings.b + beta * openings.s_sigma_2 + gamma;
         let sigma_c_lin_poly = const_poly(openings.c)
-            + &test_circuit.s_sigma_3 * perm_argument.beta()
-            + const_poly(perm_argument.gamma());
+            + &test_circuit.s_sigma_3 * beta
+            + const_poly(gamma);
         let perm_denominator_poly_linearized = sigma_c_lin_poly * sigma_a_linearized * sigma_b_linearized * openings.z_shifted;
 
         let perm_start_linearized = (z.clone() - const_poly(Fr::one())) * lagrange_base_1.evaluate(&zeta);
@@ -611,17 +609,17 @@ mod tests {
 
         let perm_denominator_poly = perm_argument.denominator().combined() * z_shifted;
 
-        let sigma_a_linearized = openings.a + perm_argument.beta() * openings.s_sigma_1 + perm_argument.gamma();
-        let sigma_b_linearized = openings.b + perm_argument.beta() * openings.s_sigma_2 + perm_argument.gamma();
+        let sigma_a_linearized = openings.a + beta * openings.s_sigma_1 + gamma;
+        let sigma_b_linearized = openings.b + beta * openings.s_sigma_2 + gamma;
         let sigma_c_lin_poly = const_poly(openings.c)
-            + &test_circuit.s_sigma_3 * perm_argument.beta()
-            + const_poly(perm_argument.gamma());
+            + &test_circuit.s_sigma_3 * beta
+            + const_poly(gamma);
         let perm_denominator_poly_linearized = sigma_c_lin_poly * sigma_a_linearized * sigma_b_linearized * openings.z_shifted;
 
         assert_eq!(openings.a, solution.a.evaluate(&zeta));
         assert_eq!(openings.s_sigma_1, test_circuit.s_sigma_1.evaluate(&zeta));
 
-        assert_eq!(sigma_a_linearized, perm_argument.hash_permutation_poly(&solution.a, &test_circuit.s_sigma_1).evaluate(&zeta));
+        assert_eq!(sigma_a_linearized, hash_permutation_poly(&solution.a, &test_circuit.s_sigma_1, beta, gamma).evaluate(&zeta));
 
         assert_eq!(perm_denominator_poly_linearized.evaluate(&zeta), perm_denominator_poly.evaluate(&zeta));
     }

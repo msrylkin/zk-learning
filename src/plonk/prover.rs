@@ -3,7 +3,7 @@ use ark_ec::CurveGroup;
 use ark_ec::pairing::Pairing;
 use ark_ff::{Field};
 use ark_poly::{DenseUVPolynomial, Polynomial};
-use ark_poly::univariate::{DenseOrSparsePolynomial, DensePolynomial, SparsePolynomial};
+use ark_poly::univariate::{DenseOrSparsePolynomial, DensePolynomial};
 use ark_std::iterable::Iterable;
 use ark_std::{One, Zero};
 use crate::plonk::big_quotient_poly::BigQuotientPoly;
@@ -249,21 +249,21 @@ mod tests {
     use ark_test_curves::bls12_381::{Bls12_381, Fr, G1Projective};
     use crate::kzg::{BatchOpening, MultipointOpening, KZG};
     use crate::plonk::blinder::{blind_solution};
-    use crate::plonk::circuit::{get_test_circuit, get_test_solution, CompiledCircuit};
+    use crate::plonk::circuit::{preprocess_circuit, CompiledCircuit};
     use crate::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::circuit::solution::Solution;
     use crate::plonk::domain::PlonkDomain;
     use crate::plonk::permutation::PermutationArgument;
     use crate::plonk::proof::{Commitments, OpeningProofs, Openings, Proof};
-    use crate::plonk::protocol::Party;
+    use crate::plonk::protocol::{Party};
     use crate::plonk::prover::{const_poly, shift_poly, PlonkProver};
-    use crate::plonk::test_utils::{get_test_kzg, hash_permutation_poly};
+    use crate::plonk::test_utils::{get_test_circuit, get_test_kzg, get_test_solution, hash_permutation_poly};
     use crate::plonk::transcript_protocol::TranscriptProtocol;
 
     struct TestEnv<'a> {
         kzg: KZG<Bls12_381>,
         domain: &'a PlonkDomain<Fr>,
-        test_circuit: CompiledCircuit<'a, Fr>,
+        test_circuit: CompiledCircuit<Fr>,
         solution: Solution<Fr>,
         transcript: TranscriptProtocol<Bls12_381>,
         Zh: SparsePolynomial<Fr>,
@@ -278,11 +278,11 @@ mod tests {
     }
 
     fn prepare_test_environment(domain: &PlonkDomain<Fr>) -> TestEnv {
-        let test_circuit = get_test_circuit(&domain);
         let solution = get_test_solution(&domain);
         let Zh = domain.get_vanishing_polynomial();
         let kzg = get_test_kzg::<Bls12_381>(domain.len());
         let transcript = get_test_transcript::<Bls12_381>();
+        let test_circuit = get_test_circuit(&domain);
 
         TestEnv {
             omega: domain.generator(),
@@ -318,7 +318,8 @@ mod tests {
     fn compute_big_quotient_test() {
         let domain = get_test_domain();
         let TestEnv { kzg, domain, test_circuit, solution, transcript, Zh, .. } = prepare_test_environment(&domain);
-
+        let preprocessed_circuit= preprocess_circuit(&test_circuit, &kzg);
+        
         let (beta, gamma) = transcript.get_beta_gamma();
         let perm_argument = PermutationArgument::new(&domain, beta, gamma, &test_circuit, &solution);
 
@@ -328,7 +329,7 @@ mod tests {
         let prover = PlonkProver::new(Party::new(
             &kzg,
             &domain,
-            &test_circuit,
+            &preprocessed_circuit,
         ));
 
         let big_q = prover.compute_big_quotient(
@@ -361,6 +362,7 @@ mod tests {
     fn test_linearization_poly() {
         let domain = get_test_domain();
         let TestEnv { kzg, domain, test_circuit, solution, transcript, Zh, .. } = prepare_test_environment(&domain);
+        let preprocessed_circuit= preprocess_circuit(&test_circuit, &kzg);
 
         let (beta, gamma) = transcript.get_beta_gamma();
         let perm_argument = PermutationArgument::new(&domain, beta, gamma, &test_circuit, &solution);
@@ -371,7 +373,7 @@ mod tests {
         let prover = PlonkProver::new(Party::new(
             &kzg,
             &domain,
-            &test_circuit,
+            &preprocessed_circuit,
         ));
 
         let big_q = prover.compute_big_quotient(
@@ -399,6 +401,7 @@ mod tests {
     fn test_prove_verify() {
         let domain = get_test_domain();
         let TestEnv { kzg, domain, test_circuit, solution, Zh, omega, .. } = prepare_test_environment(&domain);
+        let preprocessed_circuit= preprocess_circuit(&test_circuit, &kzg);
         let mut transcript = TranscriptProtocol::<Bls12_381>::new(domain.generator(), &solution.public_input.pi_vector);
         transcript.append_abc_commitments(kzg.commit(&solution.a).into_affine(), kzg.commit(&solution.b).into_affine(), kzg.commit(&solution.c).into_affine());
         let (beta, gamma) = transcript.get_beta_gamma();
@@ -415,7 +418,7 @@ mod tests {
         let prover = PlonkProver::new(Party::new(
             &kzg,
             &domain,
-            &test_circuit,
+            &preprocessed_circuit,
         ));
 
         let big_q = prover.compute_big_quotient(
@@ -589,6 +592,7 @@ mod tests {
     fn test_linearized_parts() {
         let domain = get_test_domain();
         let TestEnv { kzg, domain, test_circuit, solution, Zh, omega, transcript } = prepare_test_environment(&domain);
+        let preprocessed_circuit= preprocess_circuit(&test_circuit, &kzg);
         let solution = blind_solution(solution, &Zh);
         let (beta, gamma) = transcript.get_beta_gamma();
         let perm_argument = PermutationArgument::new(&domain, beta, gamma, &test_circuit, &solution);
@@ -598,7 +602,7 @@ mod tests {
         let prover = PlonkProver::new(Party::new(
             &kzg,
             &domain,
-            &test_circuit,
+            &preprocessed_circuit,
         ));
 
         let openings = prover.compute_openings(&solution, &z_shifted, &transcript);

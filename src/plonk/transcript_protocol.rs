@@ -1,13 +1,6 @@
-use ark_ec::AffineRepr;
 use ark_ec::pairing::Pairing;
-use ark_ff::{FftField, PrimeField};
-use crate::plonk::circuit::PublicInput;
 use crate::plonk::proof::Openings;
 use crate::transcript::Transcript;
-
-enum Round {
-    R0, R1, R2, R3, R4, R5,
-}
 
 pub struct TranscriptProtocol<P: Pairing> {
     beta: Option<P::ScalarField>,

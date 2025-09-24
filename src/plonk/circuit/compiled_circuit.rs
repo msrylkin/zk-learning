@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use ark_ff::{FftField, Field, PrimeField};
 use ark_poly::univariate::DensePolynomial;
-use crate::evaluation_domain::MultiplicativeSubgroup;
 use crate::plonk::circuit::{GateSolution, Operation, PublicInput};
 use crate::plonk::circuit::circuit_description::{CircuitDescription, Gate};
 use crate::plonk::circuit::solution::Solution;
@@ -27,8 +26,7 @@ struct CompiledGate<F: PrimeField + FftField> {
     operation: Option<Operation>
 }
 
-pub struct CompiledCircuit<'a, F: FftField + PrimeField> {
-    domain: &'a PlonkDomain<F>,
+pub struct CompiledCircuit<F: FftField + PrimeField> {
     public_inputs: Vec<usize>,
     constants: Vec<(usize, F)>,
     pub ql: DensePolynomial<F>,
@@ -46,8 +44,8 @@ pub struct CompiledCircuit<'a, F: FftField + PrimeField> {
     sigma: Vec<usize>,
 }
 
-impl<'a, F: FftField + PrimeField> CompiledCircuit<'a, F> {
-    pub fn solve(&self, public_input: &[F], _witness: &[F]) -> Solution<F> {
+impl<'a, F: FftField + PrimeField> CompiledCircuit<F> {
+    pub fn solve(&self, public_input: &[F], _witness: &[F], domain: &PlonkDomain<F>) -> Solution<F> {
         assert_eq!(public_input.len(), self.public_inputs.len());
 
         let mut solution_gates = vec![];
@@ -60,10 +58,10 @@ impl<'a, F: FftField + PrimeField> CompiledCircuit<'a, F> {
             pi_values.push(-*value);
         }
 
-        let pi_values = pad_up_to_len(pi_values, self.domain.len());
+        let pi_values = pad_up_to_len(pi_values, domain.len());
 
         let public_i = PublicInput {
-            pi: self.domain.interpolate_univariate(&pi_values),
+            pi: domain.interpolate_univariate(&pi_values),
             pi_vector: pi_values,
         };
 
@@ -98,7 +96,7 @@ impl<'a, F: FftField + PrimeField> CompiledCircuit<'a, F> {
             });
         }
 
-        Solution::new(solution_gates, self.domain, public_i)
+        Solution::new(solution_gates, domain, public_i)
     }
 }
 
@@ -107,8 +105,6 @@ pub struct CircuitCompiler<'a, F: FftField + PrimeField> {
     constants: Vec<(usize, F)>,
     gates: Vec<CompiledGate<F>>,
     domain: &'a PlonkDomain<F>,
-    // k1: F,
-    // k2: F,
     sigma: Vec<usize>,
 }
 
@@ -180,11 +176,7 @@ impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
             }
         }
 
-        // let (k1, k2) = pick_coset_shifters(domain);
-
         Self {
-            // k1,
-            // k2,
             domain,
             sigma: Self::build_sigma_permutations(&compiled_gates),
             gates: compiled_gates,
@@ -232,13 +224,12 @@ impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
         sigma
     }
 
-    pub fn compile(self) -> CompiledCircuit<'a, F>  {
+    pub fn compile(self) -> CompiledCircuit<F>  {
         let (ql, qr, qm , qo, qc) = self.get_selectors();
         let (sid_1, sid_2, sid_3) = self.get_s_id_polys();
         let (s_sigma_1, s_sigma_2, s_sigma_3) = self.get_sigma_polys();
 
         CompiledCircuit {
-            domain: self.domain,
             public_inputs: self.public_inputs,
             constants: self.constants,
             ql,
@@ -368,8 +359,8 @@ mod tests {
     use ark_std::Zero;
     use ark_test_curves::bls12_381::Fr;
     use crate::evaluation_domain::generate_multiplicative_subgroup;
-    use crate::plonk::circuit::build_test_circuit;
     use crate::plonk::domain::PlonkDomain;
+    use crate::plonk::test_utils::build_test_circuit;
     use crate::poly_utils::format_bool;
 
     #[test]
@@ -472,7 +463,7 @@ mod tests {
         let domain = PlonkDomain::create_from_subgroup(domain);
         let compiled_circuit = test_circuit.compile(&domain);
         let pi_vector = vec![Fr::from(9), Fr::from(544726)];
-        let solution = compiled_circuit.solve(&pi_vector, &[]);
+        let solution = compiled_circuit.solve(&pi_vector, &[], &domain);
 
         let expected = vec![(9, 0, 0), (544726, 0, 0), (82, 0, 0), (9, 82, 738), (738, 738, 544644), (544644, 82, 544726)];
 

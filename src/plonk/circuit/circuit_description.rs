@@ -101,7 +101,7 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
         new_var
     }
 
-    pub fn compile<'a, 'b>(&'b self, domain: &'a PlonkDomain<F>) -> CompiledCircuit<'a, F> {
+    pub fn compile(&self, domain: &PlonkDomain<F>) -> CompiledCircuit<F> {
         CircuitCompiler::new(self, domain).compile()
     }
 }
@@ -109,8 +109,8 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
 #[cfg(test)]
 mod tests {
     use ark_test_curves::bls12_381::Fr;
-    use crate::plonk::circuit::build_test_circuit;
     use crate::plonk::circuit::circuit_description::{ArithmeticGate, Gate};
+    use crate::plonk::test_utils::build_test_circuit;
 
     #[test]
     pub fn test_circuit_description() {

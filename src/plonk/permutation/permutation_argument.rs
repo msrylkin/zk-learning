@@ -12,7 +12,7 @@ pub struct PermutationArgument<'a, F: PrimeField + FftField> {
     beta: F,
     gamma: F,
     solution: &'a Solution<F>,
-    circuit: &'a CompiledCircuit<'a, F>,
+    circuit: &'a CompiledCircuit<F>,
 }
 
 impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
@@ -68,11 +68,10 @@ mod tests {
     use ark_poly::Polynomial;
     use ark_std::One;
     use ark_test_curves::bls12_381::Fr;
-    use crate::plonk::circuit::{get_test_circuit, get_test_solution};
     use crate::evaluation_domain::{generate_multiplicative_subgroup};
     use crate::plonk::domain::PlonkDomain;
     use crate::plonk::permutation::permutation_argument::PermutationArgument;
-    use crate::plonk::test_utils::hash_permutation_poly;
+    use crate::plonk::test_utils::{get_test_circuit, get_test_solution, hash_permutation_poly};
 
     #[test]
     fn test_hash_permutation_poly() {

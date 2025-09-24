@@ -1,24 +1,27 @@
+use std::ops::Deref;
 use ark_ec::pairing::Pairing;
 use ark_ec::{CurveGroup, PrimeGroup};
 use ark_ff::{Field, PrimeField};
 use ark_poly::Polynomial;
-use ark_poly::univariate::{DensePolynomial, SparsePolynomial};
+use ark_poly::univariate::{DensePolynomial};
 use ark_std::{One, Zero};
-use crate::kzg::{BatchOpening, MultipointOpening, KZG};
-use crate::plonk::circuit::{CompiledCircuit, PublicInput};
-use crate::evaluation_domain::MultiplicativeSubgroup;
-use crate::plonk::domain::PlonkDomain;
+use crate::kzg::{BatchOpening, MultipointOpening};
+use crate::plonk::circuit::{PublicInput};
 use crate::plonk::proof::Proof;
-// use crate::plonk::prover::{pick_coset_shifters};
+use crate::plonk::protocol::Party;
 use crate::plonk::transcript_protocol::TranscriptProtocol;
 use crate::poly_utils::{const_poly};
 
 pub struct PlonkVerifier<'a, P: Pairing> {
-    kzg: &'a KZG<P>,
-    domain: &'a PlonkDomain<P::ScalarField>,
-    Zh: SparsePolynomial<P::ScalarField>,
-    circuit: &'a CompiledCircuit<'a, P::ScalarField>,
-    lagrange_1: DensePolynomial<P::ScalarField>,
+    party_data: Party<'a, P>,
+}
+
+impl<'a, P: Pairing> Deref for PlonkVerifier<'a, P> {
+    type Target = Party<'a, P>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.party_data
+    }
 }
 
 struct DerivedChallenges<F: PrimeField> {
@@ -32,16 +35,10 @@ struct DerivedChallenges<F: PrimeField> {
 
 impl<'a, P: Pairing> PlonkVerifier<'a, P> {
     pub fn new(
-        kzg: &'a KZG<P>,
-        domain: &'a PlonkDomain<P::ScalarField>,
-        circuit: &'a CompiledCircuit<'a, P::ScalarField>,
+        party_data: Party<'a, P>,
     ) -> Self {
         Self {
-            kzg,
-            Zh: domain.get_vanishing_polynomial(),
-            lagrange_1: domain.lagrange_polys().first().unwrap().clone(),
-            domain,
-            circuit,
+            party_data
         }
     }
 

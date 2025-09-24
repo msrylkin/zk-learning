@@ -18,6 +18,7 @@ mod tests {
     use crate::plonk::circuit::{get_test_circuit, get_test_solution};
     use crate::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::domain::PlonkDomain;
+    use crate::plonk::protocol::Party;
     use crate::plonk::prover::PlonkProver;
     use crate::plonk::verifier::PlonkVerifier;
     // use crate::plonk::verifier::verify;
@@ -33,14 +34,14 @@ mod tests {
         let kzg = KZG::new(config);
         let public_input = solution.public_input.clone();
 
-        let prover = PlonkProver::new(
+        let prover = PlonkProver::new(Party::new(
             &kzg,
             &domain,
             &circuit,
-        );
+        ));
         
         let proof = prover.prove(solution);
-        
+
         let verifier = PlonkVerifier::new(
             &kzg,
             &domain,

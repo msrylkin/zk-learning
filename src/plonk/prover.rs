@@ -1,41 +1,38 @@
+use std::ops::Deref;
 use ark_ec::CurveGroup;
 use ark_ec::pairing::Pairing;
-use ark_ff::{FftField, Field, PrimeField};
+use ark_ff::{Field};
 use ark_poly::{DenseUVPolynomial, Polynomial};
 use ark_poly::univariate::{DenseOrSparsePolynomial, DensePolynomial, SparsePolynomial};
 use ark_std::iterable::Iterable;
 use ark_std::{One, Zero};
-use crate::kzg::{KZG};
 use crate::plonk::big_quotient_poly::BigQuotientPoly;
 use crate::plonk::blinder::{blind_big_quotient, blind_solution, blind_z_poly};
-use crate::plonk::circuit::{CompiledCircuit};
 use crate::plonk::circuit::solution::Solution;
-use crate::plonk::domain::PlonkDomain;
 use crate::plonk::permutation::PermutationArgument;
 use crate::plonk::proof::{Commitments, OpeningProofs, Openings, Proof};
+use crate::plonk::protocol::Party;
 use crate::plonk::transcript_protocol::TranscriptProtocol;
-use crate::poly_utils::{const_poly, split_poly};
+use crate::poly_utils::{const_poly};
 
 pub struct PlonkProver<'a, P: Pairing> {
-    kzg: &'a KZG<P>,
-    domain: &'a PlonkDomain<P::ScalarField>,
-    Zh: SparsePolynomial<P::ScalarField>,
-    circuit: &'a CompiledCircuit<'a, P::ScalarField>,
-    lagrange_1: DensePolynomial<P::ScalarField>,
+    party_data: Party<'a, P>,
+}
+
+impl<'a, P: Pairing> Deref for PlonkProver<'a, P> {
+    type Target = Party<'a, P>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.party_data
+    }
 }
 
 impl<'a, P: Pairing> PlonkProver<'a, P> {
     pub fn new(
-        kzg: &'a KZG<P>,
-        domain: &'a PlonkDomain<P::ScalarField>,
-        circuit: &'a CompiledCircuit<'a, P::ScalarField>,
+        party_data: Party<'a, P>,
     ) -> Self {
         Self {
-            kzg,
-            Zh: domain.get_vanishing_polynomial(),
-            lagrange_1: domain.lagrange_polys().first().unwrap().clone(),
-            domain,
-            circuit,
+            party_data
         }
     }
 
@@ -258,6 +255,7 @@ mod tests {
     use crate::plonk::domain::PlonkDomain;
     use crate::plonk::permutation::PermutationArgument;
     use crate::plonk::proof::{Commitments, OpeningProofs, Openings, Proof};
+    use crate::plonk::protocol::Party;
     use crate::plonk::prover::{const_poly, shift_poly, PlonkProver};
     use crate::plonk::test_utils::{get_test_kzg, hash_permutation_poly};
     use crate::plonk::transcript_protocol::TranscriptProtocol;
@@ -327,11 +325,11 @@ mod tests {
         let z = perm_argument.z_poly();
         let z_shifted = shift_poly(&z, &domain.generator());
 
-        let prover = PlonkProver::new(
+        let prover = PlonkProver::new(Party::new(
             &kzg,
             &domain,
             &test_circuit,
-        );
+        ));
 
         let big_q = prover.compute_big_quotient(
             &solution,
@@ -370,11 +368,11 @@ mod tests {
         let z = perm_argument.z_poly();
         let z_shifted = shift_poly(&z, &domain.generator());
 
-        let prover = PlonkProver::new(
+        let prover = PlonkProver::new(Party::new(
             &kzg,
             &domain,
             &test_circuit,
-        );
+        ));
 
         let big_q = prover.compute_big_quotient(
             &solution,
@@ -414,11 +412,11 @@ mod tests {
 
         let lagrange_base_1 = domain.lagrange_polys().first().unwrap();
 
-        let prover = PlonkProver::new(
+        let prover = PlonkProver::new(Party::new(
             &kzg,
             &domain,
             &test_circuit,
-        );
+        ));
 
         let big_q = prover.compute_big_quotient(
             &solution,
@@ -597,11 +595,11 @@ mod tests {
         let z = perm_argument.z_poly();
         let z_shifted = shift_poly(&z, &domain.generator());
 
-        let prover = PlonkProver::new(
+        let prover = PlonkProver::new(Party::new(
             &kzg,
             &domain,
             &test_circuit,
-        );
+        ));
 
         let openings = prover.compute_openings(&solution, &z_shifted, &transcript);
 

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use ark_ff::{FftField, Field, PrimeField};
 use ark_poly::univariate::DensePolynomial;
-use crate::plonk::circuit::{Operation};
 use crate::plonk::circuit::circuit_description::{CircuitDescription, Gate};
 use crate::plonk::domain::PlonkDomain;
 use crate::poly_utils::format_bool;
@@ -22,8 +21,6 @@ struct CompiledGate<F: PrimeField + FftField> {
     qm: bool,
     qo: bool,
     constant: F,
-    operation: Option<Operation>,
-    is_output: bool,
 }
 
 pub struct CompiledCircuit<F: FftField + PrimeField> {
@@ -56,14 +53,6 @@ pub struct CircuitCompiler<'a, F: FftField + PrimeField> {
     sigma: Vec<usize>,
 }
 
-// struct CompiledDescriptionVectors<F: FftField> {
-//     ql: Vec<bool>,
-//     qr: Vec<bool>,
-//     qm: Vec<bool>,
-//     qo: Vec<bool>,
-//     constants: Vec<F>,
-// }
-
 impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
     pub fn new(
         circuit_description: &'b CircuitDescription<F>,
@@ -82,8 +71,6 @@ impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
                 qm: false,
                 qo: false,
                 constant: F::zero(),
-                operation: None,
-                is_output: false,
             });
         }
 
@@ -98,8 +85,6 @@ impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
                 qm: false,
                 qo: false,
                 constant: -*e,
-                operation: None,
-                is_output: false,
             });
         }
 
@@ -115,8 +100,6 @@ impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
                         qo: true,
                         qm: false,
                         constant: F::zero(),
-                        operation: Some(Operation::Addition),
-                        is_output: *is_output
                     });
                 },
                 Gate::Multiplication (gate, is_output) => {
@@ -129,8 +112,6 @@ impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
                         qo: true,
                         qm: true,
                         constant: F::zero(),
-                        operation: Some(Operation::Multiplication),
-                        is_output: *is_output
                     });
                 }
             }

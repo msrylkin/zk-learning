@@ -8,17 +8,6 @@ use ark_poly::univariate::{DensePolynomial};
 pub use crate::plonk::circuit::compiled_circuit::CompiledCircuit;
 pub use preprocess::*;
 
-enum CircuitOperation {
-    Mul,
-    Add,
-}
-
-#[derive(Debug, Clone)]
-enum Operation {
-    Multiplication,
-    Addition,
-}
-
 #[derive(Clone, Debug)]
 pub struct PublicWitness<F: FftField + PrimeField> {
     pub pi_combined: DensePolynomial<F>,
@@ -42,7 +31,6 @@ pub struct GateSolution<F: FftField + PrimeField> {
 mod tests {
     use ark_poly::Polynomial;
     use ark_std::iterable::Iterable;
-    use ark_std::Zero;
     use ark_test_curves::bls12_381::Fr;
     use crate::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::domain::PlonkDomain;

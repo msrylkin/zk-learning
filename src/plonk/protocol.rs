@@ -1,7 +1,7 @@
 use ark_ec::pairing::Pairing;
 use ark_poly::univariate::{DensePolynomial, SparsePolynomial};
 use crate::kzg::KZG;
-use crate::plonk::circuit::{preprocess_circuit, CompiledCircuit, PreprocessedCircuit, PublicInput};
+use crate::plonk::circuit::{preprocess_circuit, CompiledCircuit, PreprocessedCircuit, PublicWitness};
 use crate::plonk::circuit::solution::Solution;
 use crate::plonk::domain::PlonkDomain;
 use crate::plonk::proof::Proof;
@@ -77,7 +77,7 @@ impl<'a, P: Pairing> PlonkInstance<'a, P> {
         )).prove(solution)
     }
 
-    pub fn verify(&self, proof: &Proof<P>, public_input: &PublicInput<P::ScalarField>) {
+    pub fn verify(&self, proof: &Proof<P>, public_input: &PublicWitness<P::ScalarField>) {
         PlonkVerifier::new(Party::new(
             &self.protocol.kzg,
             &self.protocol.domain,

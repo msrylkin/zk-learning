@@ -19,13 +19,19 @@ enum Operation {
     Addition,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
+pub struct PublicWitness<F: FftField + PrimeField> {
+    pub pi_combined: DensePolynomial<F>,
+    pub pi_vector: Vec<F>,
+    pub output_vector: Vec<F>,
+}
+
 pub struct PublicInput<F: FftField + PrimeField> {
     pub pi: DensePolynomial<F>,
     pub pi_vector: Vec<F>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GateSolution<F: FftField + PrimeField> {
     left: F,
     right: F,

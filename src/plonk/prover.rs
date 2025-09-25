@@ -42,7 +42,13 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
     ) -> Proof<P> {
         let omega = self.domain.generator();
 
-        let mut transcript = TranscriptProtocol::<P>::new(omega, &solution.public_input.pi_vector);
+        let mut transcript = TranscriptProtocol::<P>::new(
+            omega,
+            [
+                solution.public_witness.pi_vector.clone(),
+                solution.public_witness.output_vector.clone(),
+            ].concat().as_slice()
+        );
         let Zh = &self.Zh;
 
         let solution = blind_solution(solution, &Zh);
@@ -165,7 +171,7 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
             + &solution.a * &self.circuit.ql
             + &solution.b * &self.circuit.qr
             + &solution.c * &self.circuit.qo
-            + &solution.public_input.pi + &self.circuit.qc
+            + &solution.public_witness.pi_combined + &self.circuit.qc
     }
 
     fn compute_openings(
@@ -201,7 +207,7 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
             + &self.circuit.ql * openings.a
             + &self.circuit.qr * openings.b
             + &self.circuit.qo * openings.c
-            + const_poly(solution.public_input.pi.evaluate(&zeta))
+            + const_poly(solution.public_witness.pi_combined.evaluate(&zeta))
             + &self.circuit.qc;
 
         let perm_numerator_poly_linearized = z_poly * permutation_argument.numerator().evaluate(&zeta);
@@ -402,7 +408,7 @@ mod tests {
         let domain = get_test_domain();
         let TestEnv { kzg, domain, test_circuit, solution, Zh, omega, .. } = prepare_test_environment(&domain);
         let preprocessed_circuit= preprocess_circuit(&test_circuit, &kzg);
-        let mut transcript = TranscriptProtocol::<Bls12_381>::new(domain.generator(), &solution.public_input.pi_vector);
+        let mut transcript = TranscriptProtocol::<Bls12_381>::new(domain.generator(), &solution.public_witness.pi_vector);
         transcript.append_abc_commitments(kzg.commit(&solution.a).into_affine(), kzg.commit(&solution.b).into_affine(), kzg.commit(&solution.c).into_affine());
         let (beta, gamma) = transcript.get_beta_gamma();
 
@@ -485,7 +491,7 @@ mod tests {
             + &test_circuit.ql * openings.a
             + &test_circuit.qr * openings.b
             + &test_circuit.qo * openings.c
-            + const_poly(solution.public_input.pi.evaluate(&zeta))
+            + const_poly(solution.public_witness.pi_combined.evaluate(&zeta))
             + &test_circuit.qc;
 
         let perm_numerator_poly_linearized = z.clone() * (
@@ -523,7 +529,7 @@ mod tests {
             + kzg.commit(&test_circuit.ql) * openings.a
             + kzg.commit(&test_circuit.qr) * openings.b
             + kzg.commit(&test_circuit.qo) * openings.c
-            + kzg.commit(&const_poly(solution.public_input.pi.evaluate(&zeta)))
+            + kzg.commit(&const_poly(solution.public_witness.pi_combined.evaluate(&zeta)))
             + kzg.commit(&test_circuit.qc);
 
         D += proof.commitments.z * alpha * (openings.a + beta * test_circuit.sid_1.evaluate(&zeta) + gamma)
@@ -546,7 +552,7 @@ mod tests {
             + test_circuit.ql.evaluate(&zeta) * openings.a
             + test_circuit.qr.evaluate(&zeta) * openings.b
             + test_circuit.qo.evaluate(&zeta) * openings.c
-            + solution.public_input.pi.evaluate(&zeta)
+            + solution.public_witness.pi_combined.evaluate(&zeta)
             + test_circuit.qc.evaluate(&zeta);
 
         eval += z.evaluate(&zeta) * alpha * (openings.a + beta * test_circuit.sid_1.evaluate(&zeta) + gamma)

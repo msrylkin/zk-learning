@@ -29,7 +29,7 @@ mod tests {
         let tau = Fr::from(777);
         let config = setup::<Bls12_381>(domain.len() * 2, tau);
         let kzg = KZG::new(config);
-        let public_input = solution.public_input.clone();
+        let public_input = solution.public_witness.clone();
 
         let protocol = PlonkProtocol::new(kzg, domain);
         let instance = protocol.create_instance(&circuit);

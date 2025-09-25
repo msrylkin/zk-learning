@@ -1,21 +1,25 @@
 use ark_ff::{FftField, PrimeField};
 use ark_poly::univariate::DensePolynomial;
 use crate::evaluation_domain::MultiplicativeSubgroup;
-use crate::plonk::circuit::{GateSolution, PublicInput};
+use crate::plonk::circuit::{GateSolution, PublicInput, PublicWitness};
 
 pub struct Solution<F: FftField + PrimeField> {
     pub solution_gates: Vec<GateSolution<F>>,
     pub a: DensePolynomial<F>,
     pub b: DensePolynomial<F>,
     pub c: DensePolynomial<F>,
-    pub public_input: PublicInput<F>
+    pub public_witness: PublicWitness<F>,
+    // pub output: Vec<F>,
+    // pub output: Vec<F>,
 }
 
 impl<F: FftField + PrimeField> Solution<F> {
     pub fn new(
         solution_gates: Vec<GateSolution<F>>,
         domain: &MultiplicativeSubgroup<F>,
-        public_input: PublicInput<F>
+        public_witness: PublicWitness<F>,
+        // output: Vec<F>,
+        // output: Vec<F>,
     ) -> Self {
         let (a, b, c) = Self::get_abc_polys(&solution_gates, domain);
 
@@ -24,7 +28,8 @@ impl<F: FftField + PrimeField> Solution<F> {
             b,
             c,
             solution_gates,
-            public_input,
+            public_witness,
+            // output,
         }
     }
 

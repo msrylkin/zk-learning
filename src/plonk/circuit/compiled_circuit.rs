@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 use ark_ff::{FftField, Field, PrimeField};
 use ark_poly::univariate::DensePolynomial;
-use crate::plonk::circuit::{GateSolution, Operation, PublicInput};
+use crate::plonk::circuit::{Operation};
 use crate::plonk::circuit::circuit_description::{CircuitDescription, Gate};
-use crate::plonk::circuit::solution::Solution;
 use crate::plonk::domain::PlonkDomain;
 use crate::poly_utils::format_bool;
 
@@ -23,11 +22,13 @@ struct CompiledGate<F: PrimeField + FftField> {
     qm: bool,
     qo: bool,
     constant: F,
-    operation: Option<Operation>
+    operation: Option<Operation>,
+    is_output: bool,
 }
 
 pub struct CompiledCircuit<F: FftField + PrimeField> {
     public_inputs: Vec<usize>,
+    outputs: Vec<usize>,
     constants: Vec<(usize, F)>,
     pub ql: DensePolynomial<F>,
     pub qr: DensePolynomial<F>,
@@ -44,69 +45,24 @@ pub struct CompiledCircuit<F: FftField + PrimeField> {
     sigma: Vec<usize>,
 }
 
-impl<'a, F: FftField + PrimeField> CompiledCircuit<F> {
-    pub fn solve(&self, public_input: &[F], _witness: &[F], domain: &PlonkDomain<F>) -> Solution<F> {
-        assert_eq!(public_input.len(), self.public_inputs.len());
-
-        let mut solution_gates = vec![];
-        let mut variables_map = HashMap::new();
-        let mut pi_values = vec![];
-        variables_map.insert(0usize, F::zero());
-
-        for (pi_index, value) in self.public_inputs.iter().zip(public_input) {
-            variables_map.insert(*pi_index, *value);
-            pi_values.push(-*value);
-        }
-
-        let pi_values = pad_up_to_len(pi_values, domain.len());
-
-        let public_i = PublicInput {
-            pi: domain.interpolate_univariate(&pi_values),
-            pi_vector: pi_values,
-        };
-
-        for (const_i, value) in &self.constants {
-            variables_map.insert(*const_i, *value);
-        }
-
-        for gate in &self.gates {
-            let left = *variables_map.get(&gate.left).unwrap();
-            let right = *variables_map.get(&gate.right).unwrap();
-
-            let out = match gate.operation {
-                Some(Operation::Multiplication) => {
-                    let res = left * right;
-                    variables_map.insert(gate.out, res);
-
-                    res
-                },
-                Some(Operation::Addition) => {
-                    let res = left + right;
-                    variables_map.insert(gate.out, res);
-
-                    res
-                },
-                None => *variables_map.get(&gate.out).unwrap(),
-            };
-
-            solution_gates.push(GateSolution {
-                left,
-                right,
-                out,
-            });
-        }
-
-        Solution::new(solution_gates, domain, public_i)
-    }
-}
+impl<'a, F: FftField + PrimeField> CompiledCircuit<F> {}
 
 pub struct CircuitCompiler<'a, F: FftField + PrimeField> {
     public_inputs: Vec<usize>,
+    outputs: Vec<usize>,
     constants: Vec<(usize, F)>,
     gates: Vec<CompiledGate<F>>,
     domain: &'a PlonkDomain<F>,
     sigma: Vec<usize>,
 }
+
+// struct CompiledDescriptionVectors<F: FftField> {
+//     ql: Vec<bool>,
+//     qr: Vec<bool>,
+//     qm: Vec<bool>,
+//     qo: Vec<bool>,
+//     constants: Vec<F>,
+// }
 
 impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
     pub fn new(
@@ -116,9 +72,9 @@ impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
         let mut compiled_gates = vec![];
         let mut variables_map = HashMap::new();
 
-        for pi_var_i in circuit_description.public_inputs() {
+        for pi_var_i in [circuit_description.public_inputs(), circuit_description.outputs()].concat() {
             compiled_gates.push(CompiledGate {
-                left: *pi_var_i,
+                left: pi_var_i,
                 right: 0,
                 out: 0,
                 ql: true,
@@ -127,6 +83,7 @@ impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
                 qo: false,
                 constant: F::zero(),
                 operation: None,
+                is_output: false,
             });
         }
 
@@ -142,12 +99,13 @@ impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
                 qo: false,
                 constant: -*e,
                 operation: None,
+                is_output: false,
             });
         }
 
         for gate in circuit_description.gates() {
             match gate {
-                Gate::Addition (gate) => {
+                Gate::Addition (gate, is_output) => {
                     compiled_gates.push(CompiledGate {
                         left: gate.left,
                         right: gate.right,
@@ -158,9 +116,10 @@ impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
                         qm: false,
                         constant: F::zero(),
                         operation: Some(Operation::Addition),
+                        is_output: *is_output
                     });
                 },
-                Gate::Multiplication (gate) => {
+                Gate::Multiplication (gate, is_output) => {
                     compiled_gates.push(CompiledGate {
                         left: gate.left,
                         right: gate.right,
@@ -171,12 +130,14 @@ impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
                         qm: true,
                         constant: F::zero(),
                         operation: Some(Operation::Multiplication),
+                        is_output: *is_output
                     });
                 }
             }
         }
 
         Self {
+            outputs: circuit_description.outputs().to_vec(),
             domain,
             sigma: Self::build_sigma_permutations(&compiled_gates),
             gates: compiled_gates,
@@ -230,6 +191,7 @@ impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
         let (s_sigma_1, s_sigma_2, s_sigma_3) = self.get_sigma_polys();
 
         CompiledCircuit {
+            outputs: self.outputs,
             public_inputs: self.public_inputs,
             constants: self.constants,
             ql,
@@ -462,8 +424,11 @@ mod tests {
         let domain = generate_multiplicative_subgroup::<{ 1 << 4 }, Fr>();
         let domain = PlonkDomain::create_from_subgroup(domain);
         let compiled_circuit = test_circuit.compile(&domain);
-        let pi_vector = vec![Fr::from(9), Fr::from(544726)];
-        let solution = compiled_circuit.solve(&pi_vector, &[], &domain);
+        let pi_vector = vec![Fr::from(9)];
+        let solution = test_circuit.solve(&pi_vector, &[], &domain);
+
+        assert_eq!(solution.public_witness.pi_vector, vec![Fr::from(9)]);
+        assert_eq!(solution.public_witness.output_vector, vec![Fr::from(544726)]);
 
         let expected = vec![(9, 0, 0), (544726, 0, 0), (82, 0, 0), (9, 82, 738), (738, 738, 544644), (544644, 82, 544726)];
 
@@ -486,17 +451,28 @@ mod tests {
         }
 
         for i in 0..pi_vector.len() {
-            assert_eq!(solution.public_input.pi.evaluate(&domain[i]), -pi_vector[i]);
+            assert_eq!(
+                solution.public_witness.pi_combined.evaluate(&domain[i]),
+                -pi_vector[i],
+            );
             assert_eq!(compiled_circuit.qc.evaluate(&domain[i]), Fr::zero());
         }
 
-        for i in pi_vector.len()..compiled_circuit.gates.len() {
-            assert_eq!(solution.public_input.pi.evaluate(&domain[i]), Fr::zero());
+        for i in pi_vector.len()..solution.public_witness.output_vector.len() + pi_vector.len() {
+            assert_eq!(
+                solution.public_witness.pi_combined.evaluate(&domain[i]),
+                -solution.public_witness.output_vector[i - pi_vector.len()],
+            );
+            assert_eq!(compiled_circuit.qc.evaluate(&domain[i]), Fr::zero());
+        }
+
+        for i in solution.public_witness.output_vector.len() + pi_vector.len()..compiled_circuit.gates.len() {
+            assert_eq!(solution.public_witness.pi_combined.evaluate(&domain[i]), Fr::zero());
             assert_eq!(compiled_circuit.qc.evaluate(&domain[i]), compiled_circuit.gates[i].constant);
         }
 
         for i in compiled_circuit.gates.len()..domain.len() {
-            assert_eq!(solution.public_input.pi.evaluate(&domain[i]), Fr::zero());
+            assert_eq!(solution.public_witness.pi_combined.evaluate(&domain[i]), Fr::zero());
             assert_eq!(compiled_circuit.qc.evaluate(&domain[i]), Fr::zero());
         }
     }

@@ -6,7 +6,7 @@ use ark_poly::Polynomial;
 use ark_poly::univariate::{DensePolynomial};
 use ark_std::{One, Zero};
 use crate::kzg::{BatchOpening, MultipointOpening};
-use crate::plonk::circuit::{PublicInput};
+use crate::plonk::circuit::{PublicWitness};
 use crate::plonk::proof::Proof;
 use crate::plonk::protocol::Party;
 use crate::plonk::transcript_protocol::TranscriptProtocol;
@@ -44,7 +44,7 @@ impl<'a, P: Pairing> PlonkVerifier<'a, P> {
 
     pub fn verify(
         &self,
-        public_input: &PublicInput<P::ScalarField>,
+        public_witness: &PublicWitness<P::ScalarField>,
         proof: &Proof<P>,
     ) {
         let omega = self.domain.generator();
@@ -52,12 +52,13 @@ impl<'a, P: Pairing> PlonkVerifier<'a, P> {
         let challenges = derive_challenges(
             omega,
             &proof,
-            &public_input.pi_vector,
+            &public_witness.pi_vector,
+            &public_witness.output_vector,
         );
 
         let D = self.compute_linearized_commitment(
             &proof,
-            &public_input.pi,
+            &public_witness.pi_combined,
             &challenges
         );
 
@@ -136,8 +137,12 @@ fn derive_challenges<P: Pairing>(
     omega: P::ScalarField,
     proof: &Proof<P>,
     public_input_vector: &[P::ScalarField],
+    output_vector: &[P::ScalarField],
 ) -> DerivedChallenges<P::ScalarField> {
-    let mut transcript = TranscriptProtocol::<P>::new(omega, public_input_vector);
+    let mut transcript = TranscriptProtocol::<P>::new(
+        omega,
+        [public_input_vector.clone(), output_vector.clone()].concat().as_slice(),
+    );
 
     transcript.append_abc_commitments(proof.commitments.a.into_affine(), proof.commitments.b.into_affine(), proof.commitments.c.into_affine());
     transcript.append_z_commitment(proof.commitments.z.into_affine());

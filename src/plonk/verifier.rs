@@ -66,7 +66,7 @@ impl<'a, P: Pairing> PlonkVerifier<'a, P> {
             &[
                 MultipointOpening {
                     opening_point: &challenges.zeta,
-                    commitments: &[D, proof.commitments.a, proof.commitments.b, proof.commitments.c, self.kzg.commit(&self.circuit.s_sigma_1), self.kzg.commit(&self.circuit.s_sigma_2)],
+                    commitments: &[D, proof.commitments.a, proof.commitments.b, proof.commitments.c, self.circuit.sigma_1_comm, self.circuit.sigma_2_comm],
                     batch_opening: &BatchOpening::new(
                         vec![P::ScalarField::zero(), proof.openings.a, proof.openings.b, proof.openings.c, proof.openings.s_sigma_1, proof.openings.s_sigma_2],
                         proof.opening_proofs.w_zeta,
@@ -102,12 +102,12 @@ impl<'a, P: Pairing> PlonkVerifier<'a, P> {
         let zeta = &challenges.zeta;
 
         // gates
-        let mut D = self.kzg.commit(&self.circuit.qm) * proof.openings.a * proof.openings.b
-            + self.kzg.commit(&self.circuit.ql) * proof.openings.a
-            + self.kzg.commit(&self.circuit.qr) * proof.openings.b
-            + self.kzg.commit(&self.circuit.qo) * proof.openings.c
-            + self.kzg.commit(&const_poly(public_input_poly.evaluate(zeta)))
-            + self.kzg.commit(&self.circuit.qc);
+        let mut D = self.circuit.qm_comm * proof.openings.a * proof.openings.b
+            + self.circuit.ql_comm * proof.openings.a
+            + self.circuit.qr_comm * proof.openings.b
+            + self.circuit.qo_comm * proof.openings.c
+            + P::G1::generator() * public_input_poly.evaluate(zeta)
+            + self.circuit.qc_comm;
 
         // numerator
         D += proof.commitments.z * alpha * (proof.openings.a + *beta * *zeta + gamma)
@@ -115,7 +115,7 @@ impl<'a, P: Pairing> PlonkVerifier<'a, P> {
             * (proof.openings.c + *beta * *zeta * k2 + gamma);
 
         // denominator
-        D -= (P::G1::generator() * proof.openings.c + self.kzg.commit(&self.circuit.s_sigma_3) * beta + P::G1::generator() * gamma) * alpha
+        D -= (P::G1::generator() * proof.openings.c + self.circuit.sigma_3_comm * beta + P::G1::generator() * gamma) * alpha
             * (proof.openings.a + *beta * proof.openings.s_sigma_1 + gamma)
             * (proof.openings.b + *beta * proof.openings.s_sigma_2 + gamma) * proof.openings.z_shifted;
 

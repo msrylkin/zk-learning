@@ -15,22 +15,8 @@ pub struct ArithmeticGate {
 
 #[derive(Clone, Debug)]
 pub enum Gate {
-    Addition (ArithmeticGate, bool),
-    Multiplication (ArithmeticGate, bool),
-}
-
-impl Gate {
-    pub fn make_output(&mut self) {
-        match self {
-            Gate::Addition(_, out) => *out = true,
-            Gate::Multiplication(_, out) => *out = true,
-        }
-    }
-}
-
-pub struct GateInfo {
-    pub gate_i: usize,
-    pub out_var_i: usize,
+    Addition (ArithmeticGate),
+    Multiplication (ArithmeticGate),
 }
 
 #[derive(Clone, Debug)]
@@ -83,34 +69,28 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
         self.public_inputs.push(var_id);
     }
 
-    pub fn addition_gate(&mut self, left: usize, right: usize) -> GateInfo {
+    pub fn addition_gate(&mut self, left: usize, right: usize) -> usize {
         let output = self.add_variable();
 
         self.gates.push(Gate::Addition(ArithmeticGate {
             left,
             right,
             output,
-        }, false));
+        }));
 
-        GateInfo {
-            out_var_i: output,
-            gate_i: self.gates.len() - 1,
-        }
+        output
     }
 
-    pub fn multiplication_gate(&mut self, left: usize, right: usize) -> GateInfo {
+    pub fn multiplication_gate(&mut self, left: usize, right: usize) -> usize {
         let output = self.add_variable();
 
         self.gates.push(Gate::Multiplication(ArithmeticGate {
             left,
             right,
             output,
-        }, false));
+        }));
 
-        GateInfo {
-            out_var_i: output,
-            gate_i: self.gates.len() - 1,
-        }
+        output
     }
 
     pub fn constant_var(&mut self, e: F) -> usize {
@@ -129,17 +109,8 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
         new_var
     }
 
-    pub fn make_output(&mut self, gate_i: usize) {
-        let gate_out_var = self.gate_out_var(gate_i);
-        self.outputs.push(gate_out_var);
-        self.gates[gate_i].make_output();
-    }
-
-    pub fn gate_out_var(&self, gate_i: usize) -> usize {
-        match self.gates[gate_i] {
-            Gate::Addition(ArithmeticGate {output, ..}, _) => output,
-            Gate::Multiplication(ArithmeticGate {output, ..}, _) => output,
-        }
+    pub fn make_output(&mut self, var_id: usize) {
+        self.outputs.push(var_id);
     }
 
     pub fn compile(&self, domain: &PlonkDomain<F>) -> CompiledCircuit<F> {
@@ -187,7 +158,7 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
 
         for gate in &self.gates {
             match gate {
-                Gate::Addition(gate, is_out) => {
+                Gate::Addition(gate) => {
                     let left = *variables_map.get(&gate.left).unwrap_or_else(|| private_input_iter.next().unwrap());
                     let right = *variables_map.get(&gate.right).unwrap_or_else(|| private_input_iter.next().unwrap());
                     let res = left + right;
@@ -200,7 +171,7 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
 
                     variables_map.insert(gate.output, res);
                 },
-                Gate::Multiplication(gate, is_out) => {
+                Gate::Multiplication(gate) => {
                     let left = variables_map[&gate.left];
                     let right = variables_map[&gate.right];
                     let res = left * right;
@@ -268,10 +239,10 @@ mod tests {
         assert_eq!(test_circuit.outputs, vec![6, 9]);
         assert_eq!(test_circuit.constants, vec![(2, Fr::from(82)), (3, Fr::from(-1))]);
         assert_eq!(test_circuit.gates.len(), 5);
-        assert!(matches!(test_circuit.gates[0], Gate::Multiplication(ArithmeticGate { left: 1, right: 2, output: 5 }, false)));
-        assert!(matches!(test_circuit.gates[1], Gate::Multiplication(ArithmeticGate { left: 5, right: 5, output: 6 }, true)));
-        assert!(matches!(test_circuit.gates[2], Gate::Addition(ArithmeticGate { left: 6, right: 4, output: 7 }, false)));
-        assert!(matches!(test_circuit.gates[3], Gate::Multiplication(ArithmeticGate { left: 7, right: 3, output: 8 }, false)));
-        assert!(matches!(test_circuit.gates[4], Gate::Multiplication(ArithmeticGate { left: 6, right: 8, output: 9 }, true)));
+        assert!(matches!(test_circuit.gates[0], Gate::Multiplication(ArithmeticGate { left: 1, right: 2, output: 5 })));
+        assert!(matches!(test_circuit.gates[1], Gate::Multiplication(ArithmeticGate { left: 5, right: 5, output: 6 })));
+        assert!(matches!(test_circuit.gates[2], Gate::Addition(ArithmeticGate { left: 6, right: 4, output: 7 })));
+        assert!(matches!(test_circuit.gates[3], Gate::Multiplication(ArithmeticGate { left: 7, right: 3, output: 8 })));
+        assert!(matches!(test_circuit.gates[4], Gate::Multiplication(ArithmeticGate { left: 6, right: 8, output: 9 })));
     }
 }

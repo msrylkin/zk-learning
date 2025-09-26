@@ -3,7 +3,7 @@ use ark_ff::{FftField, Field, PrimeField};
 use ark_poly::univariate::DensePolynomial;
 use ark_test_curves::bls12_381::{Bls12_381, Fr};
 use crate::kzg::{setup, KZG};
-use crate::plonk::circuit::circuit_description::{CircuitDescription, GateInfo};
+use crate::plonk::circuit::circuit_description::{CircuitDescription};
 use crate::plonk::circuit::CompiledCircuit;
 use crate::plonk::circuit::solution::Solution;
 use crate::plonk::domain::PlonkDomain;
@@ -38,21 +38,21 @@ pub fn build_test_circuit<F: FftField + PrimeField>() -> CircuitDescription<F> {
     circuit_builder.make_public(a);
     let c = circuit_builder.add_variable();
 
-    let mul_result_1 = circuit_builder.multiplication_gate(a, b).out_var_i;
-    let GateInfo { out_var_i: mul_result_2, gate_i: mul_result_2_gate }  = circuit_builder.multiplication_gate(mul_result_1, mul_result_1);
-    let GateInfo { out_var_i: add_result, gate_i: add_gate_i } = circuit_builder.addition_gate(mul_result_2, c);
+    let mul_result_1 = circuit_builder.multiplication_gate(a, b);
+    let mul_result_2 = circuit_builder.multiplication_gate(mul_result_1, mul_result_1);
+    let add_result = circuit_builder.addition_gate(mul_result_2, c);
     let mul_result_3 = circuit_builder.multiplication_gate(add_result, min1);
-    let mul_result_4 = circuit_builder.multiplication_gate(mul_result_2, mul_result_3.out_var_i);
+    let mul_result_4 = circuit_builder.multiplication_gate(mul_result_2, mul_result_3);
 
-    circuit_builder.make_output(mul_result_2_gate);
-    circuit_builder.make_output(mul_result_4.gate_i);
+    circuit_builder.make_output(mul_result_2);
+    circuit_builder.make_output(mul_result_4);
 
     circuit_builder
 }
 
 #[cfg(test)]
 pub fn get_test_circuit<F: FftField + PrimeField>(domain: &PlonkDomain<F>) -> CompiledCircuit<F> {
-    build_test_circuit().compile(&domain)
+    build_test_circuit().compile(domain)
 }
 
 #[cfg(test)]

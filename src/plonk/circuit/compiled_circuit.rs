@@ -91,7 +91,7 @@ impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
 
         for gate in circuit_description.gates() {
             match gate {
-                Gate::Addition (gate, is_output) => {
+                Gate::Addition (gate) => {
                     compiled_gates.push(CompiledGate {
                         left: gate.left,
                         right: gate.right,
@@ -103,7 +103,7 @@ impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
                         constant: F::zero(),
                     });
                 },
-                Gate::Multiplication (gate, is_output) => {
+                Gate::Multiplication (gate) => {
                     compiled_gates.push(CompiledGate {
                         left: gate.left,
                         right: gate.right,

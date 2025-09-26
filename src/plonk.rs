@@ -17,15 +17,15 @@ mod tests {
     use crate::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::domain::PlonkDomain;
     use crate::plonk::protocol::{PlonkProtocol};
-    use crate::plonk::test_utils::{get_test_circuit, get_test_solution};
+    use crate::plonk::test_utils::{get_test_circuit, get_test_circuit_new, get_test_solution, get_test_solution_new};
 
     #[test]
     pub fn protocol_test() {
-        let domain = generate_multiplicative_subgroup::<{ 1 << 3 }, Fr>();
+        let domain = generate_multiplicative_subgroup::<{ 1 << 4 }, Fr>();
         let domain = PlonkDomain::create_from_subgroup(domain);
-        let circuit = get_test_circuit(&domain);
+        let circuit = get_test_circuit_new(&domain);
 
-        let solution = get_test_solution(&domain);
+        let solution = get_test_solution_new(&domain);
         let tau = Fr::from(777);
         let config = setup::<Bls12_381>(domain.len() * 2, tau);
         let kzg = KZG::new(config);

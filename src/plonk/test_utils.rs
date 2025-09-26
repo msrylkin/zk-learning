@@ -51,6 +51,16 @@ pub fn build_test_circuit_private_witness<F: FftField + PrimeField>() -> Circuit
 }
 
 #[cfg(test)]
+pub fn get_test_circuit_new<F: FftField + PrimeField>(domain: &PlonkDomain<F>) -> CompiledCircuit<F> {
+    build_test_circuit_private_witness().compile(&domain)
+}
+
+#[cfg(test)]
+pub fn get_test_solution_new<F: FftField + PrimeField>(domain: &PlonkDomain<F>) -> Solution<F> {
+    build_test_circuit_private_witness().solve(&[F::from(9)], &[F::from(-544000)], domain)
+}
+
+#[cfg(test)]
 pub fn get_test_circuit<F: FftField + PrimeField>(domain: &PlonkDomain<F>) -> CompiledCircuit<F> {
     build_test_circuit().compile(&domain)
 }

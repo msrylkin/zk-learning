@@ -183,11 +183,13 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
             });
         }
 
+        let mut private_input_iter = private_input.iter();
+
         for gate in &self.gates {
             match gate {
                 Gate::Addition(gate, is_out) => {
-                    let left = variables_map[&gate.left];
-                    let right = variables_map[&gate.right];
+                    let left = *variables_map.get(&gate.left).unwrap_or_else(|| private_input_iter.next().unwrap());
+                    let right = *variables_map.get(&gate.right).unwrap_or_else(|| private_input_iter.next().unwrap());
                     let res = left + right;
 
                     constraint_gates.push(GateSolution {
@@ -213,6 +215,8 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
                 }
             }
         }
+
+        assert!(private_input_iter.next().is_none());
 
         let mut out_gates = vec![];
 

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use ark_ff::{FftField, Field, PrimeField};
 use ark_poly::univariate::DensePolynomial;
+use ark_std::iterable::Iterable;
 use crate::plonk::circuit::circuit_description::{CircuitDescription, Gate};
 use crate::plonk::domain::PlonkDomain;
 use crate::poly_utils::format_bool;
@@ -116,6 +117,8 @@ impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
                 }
             }
         }
+
+        assert!(compiled_gates.len() <= domain.len());
 
         Self {
             outputs: circuit_description.outputs().to_vec(),

@@ -473,66 +473,84 @@ mod tests {
             assert_eq!(compiled_circuit.gates[i].out, out);
         }
 
-        // assert_eq!(compiled_circuit.gates[0].ql, true);
-        // assert_eq!(compiled_circuit.gates[0].qr, false);
-        // assert_eq!(compiled_circuit.gates[0].qm, false);
-        // assert_eq!(compiled_circuit.gates[0].qo, false);
-        // assert_eq!(compiled_circuit.gates[0].constant, Fr::zero());
-        // assert_eq!(compiled_circuit.gates[0].left, 1);
-        // assert_eq!(compiled_circuit.gates[0].right, 0);
-        // assert_eq!(compiled_circuit.gates[0].out, 0);
-        //
-        // assert_eq!(compiled_circuit.gates[1].ql, true);
-        // assert_eq!(compiled_circuit.gates[1].qr, false);
-        // assert_eq!(compiled_circuit.gates[1].qm, false);
-        // assert_eq!(compiled_circuit.gates[1].qo, false);
-        // assert_eq!(compiled_circuit.gates[1].constant, Fr::zero());
-        // assert_eq!(compiled_circuit.gates[1].left, 5);
-        // assert_eq!(compiled_circuit.gates[1].right, 0);
-        // assert_eq!(compiled_circuit.gates[1].out, 0);
-        //
-        // assert_eq!(compiled_circuit.gates[2].ql, true);
-        // assert_eq!(compiled_circuit.gates[2].qr, false);
-        // assert_eq!(compiled_circuit.gates[2].qm, false);
-        // assert_eq!(compiled_circuit.gates[2].qo, false);
-        // assert_eq!(compiled_circuit.gates[2].constant, -Fr::from(82));
-        // assert_eq!(compiled_circuit.gates[2].left, 2);
-        // assert_eq!(compiled_circuit.gates[2].right, 0);
-        // assert_eq!(compiled_circuit.gates[2].out, 0);
-        //
-        // assert_eq!(compiled_circuit.gates[3].ql, false);
-        // assert_eq!(compiled_circuit.gates[3].qr, false);
-        // assert_eq!(compiled_circuit.gates[3].qm, true);
-        // assert_eq!(compiled_circuit.gates[3].qo, true);
-        // assert_eq!(compiled_circuit.gates[3].constant, Fr::zero());
-        // assert_eq!(compiled_circuit.gates[3].left, 1);
-        // assert_eq!(compiled_circuit.gates[3].right, 2);
-        // assert_eq!(compiled_circuit.gates[3].out, 3);
-        //
-        // assert_eq!(compiled_circuit.gates[4].ql, false);
-        // assert_eq!(compiled_circuit.gates[4].qr, false);
-        // assert_eq!(compiled_circuit.gates[4].qm, true);
-        // assert_eq!(compiled_circuit.gates[4].qo, true);
-        // assert_eq!(compiled_circuit.gates[4].constant, Fr::zero());
-        // assert_eq!(compiled_circuit.gates[4].left, 3);
-        // assert_eq!(compiled_circuit.gates[4].right, 3);
-        // assert_eq!(compiled_circuit.gates[4].out, 4);
-        //
-        // assert_eq!(compiled_circuit.gates[5].ql, true);
-        // assert_eq!(compiled_circuit.gates[5].qr, true);
-        // assert_eq!(compiled_circuit.gates[5].qm, false);
-        // assert_eq!(compiled_circuit.gates[5].qo, true);
-        // assert_eq!(compiled_circuit.gates[5].constant, Fr::zero());
-        // assert_eq!(compiled_circuit.gates[5].left, 4);
-        // assert_eq!(compiled_circuit.gates[5].right, 2);
-        // assert_eq!(compiled_circuit.gates[5].out, 5);
-
         for (gate, w) in compiled_circuit.gates.iter().zip(&domain) {
             assert_eq!(compiled_circuit.ql.evaluate(w), format_bool(gate.ql));
             assert_eq!(compiled_circuit.qr.evaluate(w), format_bool(gate.qr));
             assert_eq!(compiled_circuit.qm.evaluate(w), format_bool(gate.qm));
             assert_eq!(compiled_circuit.qo.evaluate(w), -format_bool::<Fr>(gate.qo));
             assert_eq!(compiled_circuit.qc.evaluate(w), gate.constant);
+        }
+    }
+
+    #[test]
+    pub fn test_complex_circuit_solve() {
+        let test_circuit = build_test_circuit_private_witness::<Fr>();
+        let domain = generate_multiplicative_subgroup::<{ 1 << 5 }, Fr>();
+        let domain = PlonkDomain::create_from_subgroup(domain);
+        let compiled_circuit = test_circuit.compile(&domain);
+        let public_vector = vec![Fr::from(9)];
+        let private_vector = vec![Fr::from(-544000)];
+        let solution = test_circuit.solve(&public_vector, &private_vector, &domain);
+
+        assert_eq!(solution.public_witness.pi_vector, vec![Fr::from(9)]);
+        assert_eq!(solution.public_witness.output_vector, vec![Fr::from(544644), Fr::from(-350750736)]);
+
+        // a, b, c
+        let expected = vec![
+            (9, 0, 0),
+            (544644, 0, 0),
+            (-350750736, 0, 0),
+            (82, 0, 0),
+            (-1, 0, 0),
+            (9, 82, 738),
+            (738, 738, 544644),
+            (544644, -544000, 644),
+            (644, -1, -644),
+            (544644, -644, -350750736),
+        ];
+
+        assert_eq!(expected.len(), solution.solution_gates.len());
+
+        for (((left, right, out), gate), w) in expected.into_iter().zip(&solution.solution_gates).zip(&domain) {
+            assert_eq!(Fr::from(left), gate.left);
+            assert_eq!(Fr::from(right), gate.right);
+            assert_eq!(Fr::from(out), gate.out);
+
+            assert_eq!(solution.a.evaluate(w), Fr::from(left));
+            assert_eq!(solution.b.evaluate(w), Fr::from(right));
+            assert_eq!(solution.c.evaluate(w), Fr::from(out));
+        }
+
+        for i in solution.solution_gates.len()..domain.len() {
+            assert_eq!(solution.a.evaluate(&domain[i]), Fr::zero());
+            assert_eq!(solution.b.evaluate(&domain[i]), Fr::zero());
+            assert_eq!(solution.c.evaluate(&domain[i]), Fr::zero());
+        }
+
+        for i in 0..public_vector.len() {
+            assert_eq!(
+                solution.public_witness.pi_combined.evaluate(&domain[i]),
+                -public_vector[i],
+            );
+            assert_eq!(compiled_circuit.qc.evaluate(&domain[i]), Fr::zero());
+        }
+
+        for i in public_vector.len()..solution.public_witness.output_vector.len() + public_vector.len() {
+            assert_eq!(
+                solution.public_witness.pi_combined.evaluate(&domain[i]),
+                -solution.public_witness.output_vector[i - public_vector.len()],
+            );
+            assert_eq!(compiled_circuit.qc.evaluate(&domain[i]), Fr::zero());
+        }
+
+        for i in solution.public_witness.output_vector.len() + public_vector.len()..compiled_circuit.gates.len() {
+            assert_eq!(solution.public_witness.pi_combined.evaluate(&domain[i]), Fr::zero());
+            assert_eq!(compiled_circuit.qc.evaluate(&domain[i]), compiled_circuit.gates[i].constant);
+        }
+
+        for i in compiled_circuit.gates.len()..domain.len() {
+            assert_eq!(solution.public_witness.pi_combined.evaluate(&domain[i]), Fr::zero());
+            assert_eq!(compiled_circuit.qc.evaluate(&domain[i]), Fr::zero());
         }
     }
 

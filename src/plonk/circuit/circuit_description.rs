@@ -263,13 +263,15 @@ mod tests {
     pub fn test_circuit_description() {
         let test_circuit = build_test_circuit::<Fr>();
 
-        assert_eq!(test_circuit.variables_count, 6);
+        assert_eq!(test_circuit.variables_count, 10);
         assert_eq!(test_circuit.public_inputs, vec![1]);
-        assert_eq!(test_circuit.outputs, vec![5]);
-        assert_eq!(test_circuit.constants, vec![(2, Fr::from(82))]);
-        assert_eq!(test_circuit.gates.len(), 3);
-        assert!(matches!(test_circuit.gates[0], Gate::Multiplication(ArithmeticGate { left: 1, right: 2, output: 3 }, false)));
-        assert!(matches!(test_circuit.gates[1], Gate::Multiplication(ArithmeticGate { left: 3, right: 3, output: 4 }, false)));
-        assert!(matches!(test_circuit.gates[2], Gate::Addition(ArithmeticGate { left: 4, right: 2, output: 5 }, true)));
+        assert_eq!(test_circuit.outputs, vec![6, 9]);
+        assert_eq!(test_circuit.constants, vec![(2, Fr::from(82)), (3, Fr::from(-1))]);
+        assert_eq!(test_circuit.gates.len(), 5);
+        assert!(matches!(test_circuit.gates[0], Gate::Multiplication(ArithmeticGate { left: 1, right: 2, output: 5 }, false)));
+        assert!(matches!(test_circuit.gates[1], Gate::Multiplication(ArithmeticGate { left: 5, right: 5, output: 6 }, true)));
+        assert!(matches!(test_circuit.gates[2], Gate::Addition(ArithmeticGate { left: 6, right: 4, output: 7 }, false)));
+        assert!(matches!(test_circuit.gates[3], Gate::Multiplication(ArithmeticGate { left: 7, right: 3, output: 8 }, false)));
+        assert!(matches!(test_circuit.gates[4], Gate::Multiplication(ArithmeticGate { left: 6, right: 8, output: 9 }, true)));
     }
 }

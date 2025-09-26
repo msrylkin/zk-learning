@@ -277,18 +277,18 @@ mod tests {
     }
 
     fn get_test_domain() -> PlonkDomain<Fr> {
-        let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
+        let domain = generate_multiplicative_subgroup::<{ 1u64 << 4 }, Fr>();
         let domain = PlonkDomain::create_from_subgroup(domain);
 
         domain
     }
 
     fn prepare_test_environment(domain: &PlonkDomain<Fr>) -> TestEnv {
+        let test_circuit = get_test_circuit(&domain);
         let solution = get_test_solution(&domain);
         let Zh = domain.get_vanishing_polynomial();
         let kzg = get_test_kzg::<Bls12_381>(domain.len());
         let transcript = get_test_transcript::<Bls12_381>();
-        let test_circuit = get_test_circuit(&domain);
 
         TestEnv {
             omega: domain.generator(),

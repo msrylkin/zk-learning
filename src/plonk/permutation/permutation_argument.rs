@@ -75,7 +75,7 @@ mod tests {
 
     #[test]
     fn test_hash_permutation_poly() {
-        let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
+        let domain = generate_multiplicative_subgroup::<{ 1u64 << 4 }, Fr>();
         let domain = PlonkDomain::create_from_subgroup(domain);
 
         let test_circuit = get_test_circuit(&domain);
@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn test_z_poly() {
-        let domain = generate_multiplicative_subgroup::<{ 1u64 << 3 }, Fr>();
+        let domain = generate_multiplicative_subgroup::<{ 1u64 << 4 }, Fr>();
         let domain = PlonkDomain::create_from_subgroup(domain);
 
         let test_circuit = get_test_circuit(&domain);

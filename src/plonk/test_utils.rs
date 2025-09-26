@@ -29,7 +29,7 @@ pub fn hash_permutation_poly<F: Field>(
 }
 
 #[cfg(test)]
-pub fn build_test_circuit_private_witness<F: FftField + PrimeField>() -> CircuitDescription<F> {
+pub fn build_test_circuit<F: FftField + PrimeField>() -> CircuitDescription<F> {
     let mut circuit_builder = CircuitDescription::new();
 
     let a = circuit_builder.add_variable();
@@ -51,38 +51,11 @@ pub fn build_test_circuit_private_witness<F: FftField + PrimeField>() -> Circuit
 }
 
 #[cfg(test)]
-pub fn get_test_circuit_new<F: FftField + PrimeField>(domain: &PlonkDomain<F>) -> CompiledCircuit<F> {
-    build_test_circuit_private_witness().compile(&domain)
-}
-
-#[cfg(test)]
-pub fn get_test_solution_new<F: FftField + PrimeField>(domain: &PlonkDomain<F>) -> Solution<F> {
-    build_test_circuit_private_witness().solve(&[F::from(9)], &[F::from(-544000)], domain)
-}
-
-#[cfg(test)]
 pub fn get_test_circuit<F: FftField + PrimeField>(domain: &PlonkDomain<F>) -> CompiledCircuit<F> {
     build_test_circuit().compile(&domain)
 }
 
 #[cfg(test)]
 pub fn get_test_solution<F: FftField + PrimeField>(domain: &PlonkDomain<F>) -> Solution<F> {
-    build_test_circuit().solve(&[F::from(9)], &[], &domain)
-}
-
-#[cfg(test)]
-pub fn build_test_circuit<F: FftField + PrimeField>() -> CircuitDescription<F> {
-    let mut circuit_builder = CircuitDescription::new();
-
-    let a = circuit_builder.add_variable();
-    let b = circuit_builder.constant_var(F::from(82));
-    circuit_builder.make_public(a);
-
-    let mul_result_1 = circuit_builder.multiplication_gate(a, b).out_var_i;
-    let mul_result_2 = circuit_builder.multiplication_gate(mul_result_1, mul_result_1).out_var_i;
-    let gate_add_result = circuit_builder.addition_gate(mul_result_2, b);
-
-    circuit_builder.make_output(gate_add_result.gate_i);
-
-    circuit_builder
+    build_test_circuit().solve(&[F::from(9)], &[F::from(-544000)], domain)
 }

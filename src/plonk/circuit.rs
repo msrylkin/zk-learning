@@ -59,42 +59,69 @@ mod tests {
 
     #[test]
     pub fn test_sigma_poly() {
-        let domain = generate_multiplicative_subgroup::<{ 1 << 3 }, Fr>();
+        let domain = generate_multiplicative_subgroup::<{ 1 << 4 }, Fr>();
         let domain = PlonkDomain::create_from_subgroup(domain);
         let k1_coset = domain.iter().map(|e| domain.k1() * *e).collect::<Vec<_>>();
         let k2_coset = domain.iter().map(|e| domain.k2() * *e).collect::<Vec<_>>();
         let test_circuit = get_test_circuit(&domain);
 
         let sigma_1_permutations = [
-            domain[3],
-            k2_coset[5],
-            k1_coset[3],
+            domain[5],
+            domain[7],
+            k2_coset[9],
+            k1_coset[5],
+            k1_coset[8],
             domain[0],
-            k1_coset[4],
-            k2_coset[4],
-            domain[6],
-            domain[7]
+            k1_coset[6],
+            domain[9],
+            k2_coset[7],
+            k2_coset[6],
+            domain[10],
+            domain[11],
+            domain[12],
+            domain[13],
+            domain[14],
+            domain[15],
         ];
         let sigma_2_permutations = [
             k1_coset[1],
             k1_coset[2],
+            k1_coset[3],
+            k1_coset[4],
             k2_coset[0],
-            k1_coset[5],
-            k2_coset[3],
-            domain[2],
-            k1_coset[6],
+            domain[3],
+            k2_coset[5],
             k1_coset[7],
+            domain[4],
+            k2_coset[8],
+            k1_coset[10],
+            k1_coset[11],
+            k1_coset[12],
+            k1_coset[13],
+            k1_coset[14],
+            k1_coset[15],
         ];
         let sigma_3_permutations = [
             k2_coset[1],
             k2_coset[2],
+            k2_coset[3],
+            k2_coset[4],
             k1_coset[0],
-            domain[4],
-            domain[5],
+            domain[6],
             domain[1],
-            k2_coset[6],
-            k2_coset[7],
+            domain[8],
+            k1_coset[9],
+            domain[2],
+            k2_coset[10],
+            k2_coset[11],
+            k2_coset[12],
+            k2_coset[13],
+            k2_coset[14],
+            k2_coset[15],
         ];
+
+        assert_eq!(sigma_1_permutations.len(), domain.len());
+        assert_eq!(sigma_2_permutations.len(), domain.len());
 
         for (x, y) in domain.iter().zip(sigma_1_permutations.iter()) {
             assert_eq!(test_circuit.s_sigma_1.evaluate(x), y);

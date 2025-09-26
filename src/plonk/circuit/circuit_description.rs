@@ -149,7 +149,7 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
     pub fn solve(
         &self,
         public_input: &[F],
-        _witness: &[F],
+        private_input: &[F],
         domain: &PlonkDomain<F>,
     ) -> Solution<F> {
         assert_eq!(public_input.len(), self.public_inputs.len());

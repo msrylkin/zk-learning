@@ -303,7 +303,7 @@ mod tests {
     use ark_test_curves::bls12_381::Fr;
     use crate::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::domain::PlonkDomain;
-    use crate::plonk::test_utils::build_test_circuit;
+    use crate::plonk::test_utils::{build_test_circuit, build_test_circuit_private_witness};
     use crate::poly_utils::format_bool;
 
     #[test]
@@ -389,6 +389,140 @@ mod tests {
         assert_eq!(compiled_circuit.gates[5].left, 4);
         assert_eq!(compiled_circuit.gates[5].right, 2);
         assert_eq!(compiled_circuit.gates[5].out, 5);
+
+        for (gate, w) in compiled_circuit.gates.iter().zip(&domain) {
+            assert_eq!(compiled_circuit.ql.evaluate(w), format_bool(gate.ql));
+            assert_eq!(compiled_circuit.qr.evaluate(w), format_bool(gate.qr));
+            assert_eq!(compiled_circuit.qm.evaluate(w), format_bool(gate.qm));
+            assert_eq!(compiled_circuit.qo.evaluate(w), -format_bool::<Fr>(gate.qo));
+            assert_eq!(compiled_circuit.qc.evaluate(w), gate.constant);
+        }
+    }
+
+    #[test]
+    pub fn test_circuit_compile_private_input() {
+        let test_circuit = build_test_circuit_private_witness::<Fr>();
+        let domain = generate_multiplicative_subgroup::<{ 1 << 4 }, Fr>();
+        let domain = PlonkDomain::create_from_subgroup(domain);
+        let compiled_circuit = test_circuit.compile(&domain);
+
+        assert_eq!(compiled_circuit.sigma, vec![
+            5, // 0 -> 5
+            7, // 1 -> 7
+            29, // 2 -> 29
+            15, // 3 -> 15
+            18, // 4 -> 18
+            0, // 5 -> 0
+            16, // 6 -> 16
+            9, // 7 -> 9
+            27, // 8 -> 27
+            26, // 9 -> 26
+
+            11, // 10 -> 11
+            12, // 11 -> 12
+            13, // 12 -> 13
+            14, // 13 -> 14
+            20, // 14 -> 20
+            3, // 15 -> 3
+            25, // 16 -> 25
+            17, // 17 -> 17
+            4, // 18 -> 4
+            28, // 19 -> 28
+
+            21, // 20 -> 21
+            22, // 21 -> 22
+            23, // 22 -> 23
+            24, // 23 -> 24
+            10, // 24 -> 10
+            6, // 25 -> 6
+            1, // 26 -> 7
+            8, // 27 -> 8
+            19, // 28 -> 19
+            2, // 29 -> 2
+        ]);
+
+        assert_eq!(compiled_circuit.public_inputs.len(), test_circuit.public_inputs_count());
+
+        // ql, qr, qm, qo, const (qc), left, right, out
+        let rows = vec![
+            (true, false, false, false, 0, 1, 0, 0),
+            (true, false, false, false, 0, 6, 0, 0),
+            (true, false, false, false, 0, 9, 0, 0),
+            (true, false, false, false, -82, 2, 0, 0),
+            (true, false, false, false, 1, 3, 0, 0),
+            (false, false, true, true, 0, 1, 2, 5),
+            (false, false, true, true, 0, 5, 5, 6),
+            (true, true, false, true, 0, 6, 4, 7),
+            (false, false, true, true, 0, 7, 3, 8),
+            (false, false, true, true, 0, 6, 8, 9),
+        ];
+
+        assert_eq!(rows.len(), compiled_circuit.gates.len());
+
+        for (i, (ql, qr, qm, qo, constant, left, right, out)) in rows.into_iter().enumerate() {
+            assert_eq!(compiled_circuit.gates[i].ql, ql);
+            assert_eq!(compiled_circuit.gates[i].qr, qr);
+            assert_eq!(compiled_circuit.gates[i].qm, qm);
+            assert_eq!(compiled_circuit.gates[i].qo, qo);
+            assert_eq!(compiled_circuit.gates[i].constant, Fr::from(constant));
+            assert_eq!(compiled_circuit.gates[i].left, left);
+            assert_eq!(compiled_circuit.gates[i].right, right);
+            assert_eq!(compiled_circuit.gates[i].out, out);
+        }
+
+        // assert_eq!(compiled_circuit.gates[0].ql, true);
+        // assert_eq!(compiled_circuit.gates[0].qr, false);
+        // assert_eq!(compiled_circuit.gates[0].qm, false);
+        // assert_eq!(compiled_circuit.gates[0].qo, false);
+        // assert_eq!(compiled_circuit.gates[0].constant, Fr::zero());
+        // assert_eq!(compiled_circuit.gates[0].left, 1);
+        // assert_eq!(compiled_circuit.gates[0].right, 0);
+        // assert_eq!(compiled_circuit.gates[0].out, 0);
+        //
+        // assert_eq!(compiled_circuit.gates[1].ql, true);
+        // assert_eq!(compiled_circuit.gates[1].qr, false);
+        // assert_eq!(compiled_circuit.gates[1].qm, false);
+        // assert_eq!(compiled_circuit.gates[1].qo, false);
+        // assert_eq!(compiled_circuit.gates[1].constant, Fr::zero());
+        // assert_eq!(compiled_circuit.gates[1].left, 5);
+        // assert_eq!(compiled_circuit.gates[1].right, 0);
+        // assert_eq!(compiled_circuit.gates[1].out, 0);
+        //
+        // assert_eq!(compiled_circuit.gates[2].ql, true);
+        // assert_eq!(compiled_circuit.gates[2].qr, false);
+        // assert_eq!(compiled_circuit.gates[2].qm, false);
+        // assert_eq!(compiled_circuit.gates[2].qo, false);
+        // assert_eq!(compiled_circuit.gates[2].constant, -Fr::from(82));
+        // assert_eq!(compiled_circuit.gates[2].left, 2);
+        // assert_eq!(compiled_circuit.gates[2].right, 0);
+        // assert_eq!(compiled_circuit.gates[2].out, 0);
+        //
+        // assert_eq!(compiled_circuit.gates[3].ql, false);
+        // assert_eq!(compiled_circuit.gates[3].qr, false);
+        // assert_eq!(compiled_circuit.gates[3].qm, true);
+        // assert_eq!(compiled_circuit.gates[3].qo, true);
+        // assert_eq!(compiled_circuit.gates[3].constant, Fr::zero());
+        // assert_eq!(compiled_circuit.gates[3].left, 1);
+        // assert_eq!(compiled_circuit.gates[3].right, 2);
+        // assert_eq!(compiled_circuit.gates[3].out, 3);
+        //
+        // assert_eq!(compiled_circuit.gates[4].ql, false);
+        // assert_eq!(compiled_circuit.gates[4].qr, false);
+        // assert_eq!(compiled_circuit.gates[4].qm, true);
+        // assert_eq!(compiled_circuit.gates[4].qo, true);
+        // assert_eq!(compiled_circuit.gates[4].constant, Fr::zero());
+        // assert_eq!(compiled_circuit.gates[4].left, 3);
+        // assert_eq!(compiled_circuit.gates[4].right, 3);
+        // assert_eq!(compiled_circuit.gates[4].out, 4);
+        //
+        // assert_eq!(compiled_circuit.gates[5].ql, true);
+        // assert_eq!(compiled_circuit.gates[5].qr, true);
+        // assert_eq!(compiled_circuit.gates[5].qm, false);
+        // assert_eq!(compiled_circuit.gates[5].qo, true);
+        // assert_eq!(compiled_circuit.gates[5].constant, Fr::zero());
+        // assert_eq!(compiled_circuit.gates[5].left, 4);
+        // assert_eq!(compiled_circuit.gates[5].right, 2);
+        // assert_eq!(compiled_circuit.gates[5].out, 5);
 
         for (gate, w) in compiled_circuit.gates.iter().zip(&domain) {
             assert_eq!(compiled_circuit.ql.evaluate(w), format_bool(gate.ql));

@@ -12,6 +12,10 @@ fn pad_up_to_len<F: Field>(mut vec: Vec<F>, len: usize) -> Vec<F> {
     vec
 }
 
+type Selectors<F> = (
+    DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>
+);
+
 #[derive(Debug, Clone)]
 struct CompiledGate<F: PrimeField + FftField> {
     left: usize,
@@ -42,8 +46,6 @@ pub struct CompiledCircuit<F: FftField + PrimeField> {
     gates: Vec<CompiledGate<F>>,
     sigma: Vec<usize>,
 }
-
-impl<'a, F: FftField + PrimeField> CompiledCircuit<F> {}
 
 pub struct CircuitCompiler<'a, F: FftField + PrimeField> {
     public_inputs: Vec<usize>,
@@ -134,22 +136,22 @@ impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
         let mut items = vec![];
 
         for gate in gates {
-            items.push((gate.left, 0));
+            items.push(gate.left);
         }
 
         for gate in gates {
-            items.push((gate.right, 1));
+            items.push(gate.right);
         }
 
         for gate in gates {
-            items.push((gate.out, 2));
+            items.push(gate.out);
         }
 
         let mut prev_index_col_map = HashMap::new();
         let mut first_index_map = HashMap::new();
         let mut sigma = vec![0; gates.len() * 3];
 
-        for (i, (var_id, col)) in items.into_iter().enumerate() {
+        for (i, var_id) in items.into_iter().enumerate() {
             let current = prev_index_col_map.remove(&var_id);
 
             match current {
@@ -194,9 +196,7 @@ impl<'a, 'b, F: FftField + PrimeField> CircuitCompiler<'a, F> {
         }
     }
 
-    pub fn get_selectors(&self) -> (
-        DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>
-    ) {
+    pub fn get_selectors(&self) -> Selectors<F> {
         let mut ql_values = vec![];
         let mut qr_values = vec![];
         let mut qm_values = vec![];
@@ -306,7 +306,7 @@ mod tests {
     use ark_test_curves::bls12_381::Fr;
     use crate::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::domain::PlonkDomain;
-    use crate::plonk::test_utils::{build_test_circuit};
+    use crate::plonk::test_utils::test_utils::build_test_circuit;
     use crate::poly_utils::format_bool;
 
     #[test]

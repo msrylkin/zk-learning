@@ -11,8 +11,7 @@ mod plonk;
 mod evaluation_domain;
 mod transcript;
 
-fn main() {
-    // kzg::run_kzg();
-    // schnorr::run_schnorr();
-}
-
+pub use gkr::*;
+pub use sumcheck::*;
+pub use kzg::*;
+pub use plonk::*;

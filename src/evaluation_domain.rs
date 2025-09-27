@@ -1,5 +1,5 @@
 use std::ops::Deref;
-use ark_ff::{Field, PrimeField};
+use ark_ff::{PrimeField};
 use ark_poly::univariate::{DensePolynomial, SparsePolynomial};
 use crate::poly_utils::{generate_lagrange_basis_polys, interpolate_on_lagrange_basis_polys};
 
@@ -47,7 +47,7 @@ impl<F: PrimeField> MultiplicativeSubgroup<F> {
     }
 
     pub fn interpolate_univariate(&self, values: &[F]) -> DensePolynomial<F> {
-        interpolate_on_lagrange_basis_polys(&self.lagrange_polys.as_slice(), values)
+        interpolate_on_lagrange_basis_polys(self.lagrange_polys.as_slice(), values)
     }
 }
 
@@ -90,7 +90,6 @@ pub fn generate_multiplicative_subgroup<const N: u64, F: PrimeField>() -> Multip
     };
 
     let H = (0..subgroup_order)
-        .into_iter()
         .map(|i| h.pow([i]))
         .collect::<Vec<_>>();
 

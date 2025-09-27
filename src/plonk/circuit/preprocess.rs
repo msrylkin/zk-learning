@@ -19,7 +19,7 @@ impl<'a, P: Pairing> Deref for PreprocessedCircuit<'a, P> {
     type Target = CompiledCircuit<P::ScalarField>;
 
     fn deref(&self) -> &Self::Target {
-        &self.circuit
+        self.circuit
     }
 }
 

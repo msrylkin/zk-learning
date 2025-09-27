@@ -51,7 +51,7 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
         );
         let Zh = &self.Zh;
 
-        let solution = blind_solution(solution, &Zh);
+        let solution = blind_solution(solution, Zh);
 
         let (a_comm, b_comm, c_comm) = (
             self.kzg.commit(&solution.a),
@@ -62,10 +62,10 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
         transcript.append_abc_commitments(a_comm.into_affine(), b_comm.into_affine(), c_comm.into_affine());
         let (beta, gamma ) = transcript.get_beta_gamma();
 
-        let permutation_argument = PermutationArgument::new(&self.domain, beta, gamma, self.circuit, &solution);
+        let permutation_argument = PermutationArgument::new(self.domain, beta, gamma, self.circuit, &solution);
 
         let z_poly = permutation_argument.z_poly();
-        let z_poly = blind_z_poly(&z_poly, &Zh);
+        let z_poly = blind_z_poly(&z_poly, Zh);
         let z_comm = self.kzg.commit(&z_poly);
         let z_shifted = shift_poly(&z_poly, &omega);
 
@@ -136,7 +136,7 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
         perm_argument: &PermutationArgument<P::ScalarField>,
         transcript_protocol: &TranscriptProtocol<P>,
     ) -> BigQuotientPoly<P::ScalarField> {
-        let gate_check_poly = self.compute_gate_check_poly(&solution);
+        let gate_check_poly = self.compute_gate_check_poly(solution);
 
         let perm_numerator_poly = perm_argument.numerator().combined() * z;
         let perm_denominator_poly = perm_argument.denominator().combined() * z_shifted;
@@ -224,13 +224,11 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
 
         let alpha = transcript_protocol.get_alpha();
 
-        let r_poly = gate_check_poly_linearized
+        gate_check_poly_linearized
             + perm_numerator_poly_linearized * alpha
             - perm_denominator_poly_linearized * alpha
             + perm_start_linearized * alpha.square()
-            - linearized_vanishing_t;
-
-        r_poly
+            - linearized_vanishing_t
     }
 }
 
@@ -239,7 +237,7 @@ fn shift_poly<F: Field>(poly: &DensePolynomial<F>, scalar: &F) -> DensePolynomia
         poly.coeffs
             .iter()
             .enumerate()
-            .map(|(i, c)| *c * scalar.pow(&[i as u64]))
+            .map(|(i, c)| *c * scalar.pow([i as u64]))
             .collect(),
     )
 }
@@ -263,7 +261,7 @@ mod tests {
     use crate::plonk::proof::{Commitments, OpeningProofs, Openings, Proof};
     use crate::plonk::protocol::{Party};
     use crate::plonk::prover::{const_poly, shift_poly, PlonkProver};
-    use crate::plonk::test_utils::{get_test_circuit, get_test_kzg, get_test_solution, hash_permutation_poly};
+    use crate::plonk::test_utils::test_utils::{get_test_circuit, get_test_kzg, get_test_solution, hash_permutation_poly};
     use crate::plonk::transcript_protocol::TranscriptProtocol;
 
     struct TestEnv<'a> {
@@ -354,7 +352,7 @@ mod tests {
         let z_poly_m1 = (z - DensePolynomial::from_coefficients_slice(&[Fr::one()])) * lagrange_base_1;
         let alpha = transcript.get_alpha();
 
-        let restored = big_q.to_combined();
+        let restored = big_q.into_combined();
 
         assert_eq!(
             restored * DensePolynomial::from(Zh),
@@ -367,7 +365,7 @@ mod tests {
     #[test]
     fn test_linearization_poly() {
         let domain = get_test_domain();
-        let TestEnv { kzg, domain, test_circuit, solution, transcript, Zh, .. } = prepare_test_environment(&domain);
+        let TestEnv { kzg, domain, test_circuit, solution, transcript, .. } = prepare_test_environment(&domain);
         let preprocessed_circuit= preprocess_circuit(&test_circuit, &kzg);
 
         let (beta, gamma) = transcript.get_beta_gamma();
@@ -597,7 +595,7 @@ mod tests {
     #[test]
     fn test_linearized_parts() {
         let domain = get_test_domain();
-        let TestEnv { kzg, domain, test_circuit, solution, Zh, omega, transcript } = prepare_test_environment(&domain);
+        let TestEnv { kzg, domain, test_circuit, solution, Zh, transcript, .. } = prepare_test_environment(&domain);
         let preprocessed_circuit= preprocess_circuit(&test_circuit, &kzg);
         let solution = blind_solution(solution, &Zh);
         let (beta, gamma) = transcript.get_beta_gamma();

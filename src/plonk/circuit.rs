@@ -6,6 +6,7 @@ mod preprocess;
 use ark_ff::{FftField, PrimeField};
 use ark_poly::univariate::{DensePolynomial};
 pub use crate::plonk::circuit::compiled_circuit::CompiledCircuit;
+pub use crate::plonk::circuit::circuit_description::CircuitDescription;
 pub use preprocess::*;
 
 #[derive(Clone, Debug)]
@@ -34,7 +35,7 @@ mod tests {
     use ark_test_curves::bls12_381::Fr;
     use crate::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::domain::PlonkDomain;
-    use crate::plonk::test_utils::get_test_circuit;
+    use crate::plonk::test_utils::test_utils::get_test_circuit;
 
     #[test]
     pub fn test_s_id() {

@@ -29,6 +29,12 @@ pub struct CircuitDescription<F: FftField + PrimeField> {
     constants: Vec<(usize, F)>
 }
 
+impl<F: FftField + PrimeField> Default for CircuitDescription<F> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<F: FftField + PrimeField> CircuitDescription<F> {
     pub fn new() -> Self {
         Self {
@@ -157,6 +163,8 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
         let mut private_input_iter = private_input.iter();
 
         for gate in &self.gates {
+            println!("\ngate {:?}", gate);
+            println!("vars map {:?}", variables_map);
             match gate {
                 Gate::Addition(gate) => {
                     let left = *variables_map.get(&gate.left).unwrap_or_else(|| private_input_iter.next().unwrap());
@@ -172,8 +180,8 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
                     variables_map.insert(gate.output, res);
                 },
                 Gate::Multiplication(gate) => {
-                    let left = variables_map[&gate.left];
-                    let right = variables_map[&gate.right];
+                    let left = *variables_map.get(&gate.left).unwrap_or_else(|| private_input_iter.next().unwrap());
+                    let right = *variables_map.get(&gate.right).unwrap_or_else(|| private_input_iter.next().unwrap());
                     let res = left * right;
 
                     constraint_gates.push(GateSolution {
@@ -228,7 +236,7 @@ fn pad_up_to_len<F: Field>(mut vec: Vec<F>, len: usize) -> Vec<F> {
 mod tests {
     use ark_test_curves::bls12_381::Fr;
     use crate::plonk::circuit::circuit_description::{ArithmeticGate, Gate};
-    use crate::plonk::test_utils::build_test_circuit;
+    use crate::plonk::test_utils::test_utils::build_test_circuit;
 
     #[test]
     pub fn test_circuit_description() {

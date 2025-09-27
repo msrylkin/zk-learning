@@ -53,7 +53,7 @@ pub fn verify<F: Field, R: RandomOracle<Item = F>>(
 
         let final_oracle = GKRFinalOracle::new(add_fixed, mul_fixed, q.clone());
 
-        sum_check_protocol.verify(&final_oracle, &sumcheck_proof, mi);
+        sum_check_protocol.verify(&final_oracle, sumcheck_proof, mi);
 
         ri = l.iter().map(|li| li.evaluate(r_star)).collect::<Vec<_>>();
         mi = q.evaluate(r_star);

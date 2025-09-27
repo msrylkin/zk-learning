@@ -15,6 +15,9 @@ pub struct LayerRoundPoly<F: Field> {
     Wi_1_b: DenseMultilinearExtension<F>,
 }
 
+type FixingCounts = (usize, usize);
+type EvaluationMasks = (usize, usize, usize);
+
 impl<F: Field> LayerRoundPoly<F> {
     pub fn new(
         add_i: DenseMultilinearExtension<F>,
@@ -33,7 +36,7 @@ impl<F: Field> LayerRoundPoly<F> {
 fn generate_round_poly_eval_parameters(
     a_nvars: usize,
     b_nvars: usize,
-) -> ((usize, usize), Vec<(usize, usize, usize)>){
+) -> (FixingCounts, Vec<EvaluationMasks>){
     let (a_vars_fixing, b_vars_fixing) = {
         if a_nvars > 0 {
             (a_nvars - 1, b_nvars)
@@ -44,7 +47,7 @@ fn generate_round_poly_eval_parameters(
 
     let combined_domain = 1 << (a_vars_fixing + b_vars_fixing); // for example 1111 where [1] = a and [111] = b
     let b_mask = (1 << b_vars_fixing) - 1; // 0111
-    let a_mask = (1 << a_vars_fixing + b_vars_fixing) - 1 - b_mask; // 1000
+    let a_mask = (1 << (a_vars_fixing + b_vars_fixing)) - 1 - b_mask; // 1000
 
     let mut res = vec![];
 
@@ -152,7 +155,7 @@ pub fn prove<F: Field, O: RandomOracle<Item = F>>(
     let solution_inputs = solution.inputs();
     let outputs = solution_evaluations.last().unwrap();
 
-    let W0 = interpolate(&outputs);
+    let W0 = interpolate(outputs);
     let r0 = random_oracle.get_randomness(W0.num_vars());
     let mut ri = r0.clone();
 

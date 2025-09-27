@@ -10,6 +10,11 @@ mod domain;
 mod test_utils;
 mod big_quotient_poly;
 
+pub use circuit::*;
+pub use domain::*;
+pub use protocol::*;
+pub use proof::*;
+
 #[cfg(test)]
 mod tests {
     use ark_test_curves::bls12_381::{Bls12_381, Fr};
@@ -17,7 +22,7 @@ mod tests {
     use crate::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::domain::PlonkDomain;
     use crate::plonk::protocol::{PlonkProtocol};
-    use crate::plonk::test_utils::{get_test_circuit, get_test_solution};
+    use crate::plonk::test_utils::test_utils::{get_test_circuit, get_test_solution};
 
     #[test]
     pub fn protocol_test() {

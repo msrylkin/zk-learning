@@ -1,10 +1,9 @@
 use std::fmt::Debug;
-use std::ops::{Add, Deref};
+use std::ops::{Add};
 use std::time::Instant;
 use ark_ff::{FftField, Field, PrimeField};
-use ark_poly::{DenseMultilinearExtension, DenseUVPolynomial, EvaluationDomain, MultilinearExtension, Polynomial, Radix2EvaluationDomain};
-use ark_poly::univariate::{DensePolynomial, SparsePolynomial};
-use ark_std::iterable::Iterable;
+use ark_poly::{DenseMultilinearExtension, DenseUVPolynomial, MultilinearExtension, Polynomial};
+use ark_poly::univariate::{DensePolynomial};
 use ark_std::Zero;
 
 pub fn get_reversed_vars_poly<F: Field>(poly: &DenseMultilinearExtension<F>) -> DenseMultilinearExtension<F> {
@@ -47,13 +46,13 @@ pub fn reverse_bits(mut n: usize, k: usize) -> usize {
 
 // f(x_1, x_2) | l(t) = f_l(x_1(t), x_2(t))
 pub fn restrict_poly<F: Field>(
-    line: &Vec<DensePolynomial<F>>,
+    line: &[DensePolynomial<F>],
     w: DenseMultilinearExtension<F>,
 ) -> DensePolynomial<F> {
     let num_vars = w.num_vars();
     assert_eq!(line.len(), num_vars);
 
-    let line_rev = line.clone().into_iter().rev().collect::<Vec<_>>();
+    let line_rev = line.iter().rev().collect::<Vec<_>>();
 
     let mut res = DensePolynomial::from_coefficients_slice(&[F::zero()]);
 
@@ -62,16 +61,17 @@ pub fn restrict_poly<F: Field>(
 
     for (i, term) in evals_to_map.into_iter().enumerate() {
         let mut restricted = DensePolynomial::from_coefficients_slice(&[term]);
+        #[allow(clippy::needless_range_loop)]
         for k in 0..num_vars {
             let bit = (i >> k) & 1;
 
             if bit == 0 {
                 let one_poly = DensePolynomial::from_coefficients_slice(&[F::one()]);
-                let mul_res = restricted.naive_mul(&(&one_poly - &line_rev[k]));
+                let mul_res = restricted.naive_mul(&(one_poly - line_rev[k]));
 
                 restricted = mul_res;
             } else {
-                let mul_res = restricted.naive_mul(&line_rev[k]);
+                let mul_res = restricted.naive_mul(line_rev[k]);
 
                 restricted = mul_res;
             }
@@ -173,12 +173,7 @@ pub fn get_evaluations_by_mask<F: Field>(
     let index_1 = bit_set_negated & mask;
     let index_2 = bit_set | mask;
 
-    let mut new_evals = vec![];
-
-    new_evals.push(mle_evals[index_1]);
-    new_evals.push(mle_evals[index_2]);
-
-    new_evals
+    vec![mle_evals[index_1], mle_evals[index_2]]
 }
 
 
@@ -212,7 +207,7 @@ pub fn interpolate_on_lagrange_basis_polys<F: Field>(polys: &[DensePolynomial<F>
     assert_eq!(polys.len(), values.len());
 
     polys
-        .into_iter()
+        .iter()
         .zip(values)
         .map(|(lp, y)| lp * *y)
         .fold(DensePolynomial::zero(), |acc, lp| acc + lp)
@@ -267,8 +262,8 @@ pub fn generate_lagrange_basis_polys<F: Field>(domain: &[F]) -> Vec<DensePolynom
         let mut res = vec![];
         let mut sign = F::one();
 
-        for degree_index in 0..sums.len() {
-            res.push(full_denom * sums[degree_index] * sign);
+        for sum in &sums {
+            res.push(full_denom * sum * sign);
 
             sign *= F::from(-1);
         }

@@ -5,6 +5,9 @@ mod proof;
 mod test_utils;
 mod protocol;
 
+pub use circuit::*;
+pub use protocol::*;
+
 #[cfg(test)]
 mod tests {
     use ark_test_curves::bls12_381::Fr;

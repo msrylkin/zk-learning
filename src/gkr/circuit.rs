@@ -55,6 +55,12 @@ pub struct Layer {
     gates: Vec<GateType>,
 }
 
+impl Default for Layer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Layer {
     pub fn new() -> Self {
         Self { gates: vec![] }
@@ -66,7 +72,6 @@ impl Layer {
 
         Self {
             gates,
-            ..self
         }
     }
 
@@ -76,7 +81,6 @@ impl Layer {
         
         Self {
             gates,
-            ..self
         }
     }
 }
@@ -142,7 +146,7 @@ impl<F: Field> Circuit<F> {
             let mut current_layer_values = vec![];
             
             for gate in &layer.gates {
-                let calculated_result = gate.execute(&previous_layer_values);
+                let calculated_result = gate.execute(previous_layer_values);
                 current_layer_values.push(calculated_result);
             }
             

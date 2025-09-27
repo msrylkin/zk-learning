@@ -28,7 +28,7 @@ pub fn blind_big_quotient<F: PrimeField>(
 ) -> BigQuotientPoly<F> {
     let [b10, b11] = generate_t_blinders();
 
-    let (t_lo, t_mid, t_hi) = quotient_poly.to_splitted_polys();
+    let (t_lo, t_mid, t_hi) = quotient_poly.into_splitted_polys();
 
     BigQuotientPoly::create_from_splitted_parts(
         t_lo + DensePolynomial::from(SparsePolynomial::from_coefficients_slice(&[(n, b10)])),
@@ -92,7 +92,7 @@ mod tests {
         ]));
         let (lo, mid, hi) = split_poly(&poly, 4);
         let quotient_poly = BigQuotientPoly::create_from_splitted_parts(lo, mid, hi, 4);
-        let (lo, mid, hi) = blind_big_quotient(quotient_poly, 4).to_splitted_polys();
+        let (lo, mid, hi) = blind_big_quotient(quotient_poly, 4).into_splitted_polys();
 
         for w in &domain {
             assert_eq!(

@@ -1,10 +1,8 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::marker::PhantomData;
-use ark_ec::{AffineRepr, CurveGroup};
-use ark_ec::pairing::Pairing;
+use ark_ec::{AffineRepr};
 use ark_ff::Field;
-use ark_ff::field_hashers::{hash_to_field, DefaultFieldHasher, HashToField};
-use ark_std::One;
+use ark_ff::field_hashers::{DefaultFieldHasher, HashToField};
 use sha2::Sha256;
 
 pub struct Transcript<F: Field> {

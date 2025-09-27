@@ -1,7 +1,7 @@
 use ark_ff::{FftField, PrimeField};
 use ark_poly::univariate::DensePolynomial;
 use crate::evaluation_domain::MultiplicativeSubgroup;
-use crate::plonk::circuit::{GateSolution, PublicInput, PublicWitness};
+use crate::plonk::circuit::{GateSolution, PublicWitness};
 
 pub struct Solution<F: FftField + PrimeField> {
     pub solution_gates: Vec<GateSolution<F>>,

@@ -1,9 +1,7 @@
-use std::ops::{Div, Mul, Sub};
-use ark_ec::{AffineRepr, CurveGroup, PrimeGroup};
+use ark_ec::{PrimeGroup};
 use ark_ec::pairing::Pairing;
-use ark_std::{UniformRand, Zero};
-use ark_test_curves::bls12_381::{Bls12_381, Fr, G1Affine as G1, G2Affine as G2};
-use ark_ff::{FftField, One, PrimeField};
+use ark_std::{Zero};
+use ark_ff::{One};
 use ark_poly::univariate::{DensePolynomial};
 use ark_ff::Field;
 use ark_poly::{DenseUVPolynomial, Polynomial};
@@ -53,13 +51,13 @@ pub struct BatchOpening<P: Pairing> {
 
 impl<P: Pairing> BatchOpening<P> {
     pub fn proof(&self) -> P::G1 {
-        self.evaluation_proof.clone()
+        self.evaluation_proof
     }
 }
 
 impl<P: Pairing> Opening<P> {
     pub fn proof(&self) -> P::G1 {
-        self.evaluation_proof.clone()
+        self.evaluation_proof
     }
 }
 
@@ -228,7 +226,7 @@ impl<P: Pairing> KZG<P> {
                 let diff = Self::linearized_comm_evals_diff(
                     opening.commitments,
                     &opening.batch_opening.evaluations,
-                    &opening.linearization_scalar,
+                    opening.linearization_scalar,
                 );
 
                 let scale = multipoint_linearization_scalar.pow([i as u64]);
@@ -251,14 +249,12 @@ impl<P: Pairing> KZG<P> {
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Mul;
-    use ark_ec::{CurveGroup, PrimeGroup};
-    use ark_ec::pairing::Pairing;
+    use ark_ec::{PrimeGroup};
     use ark_ff::Field;
     use ark_poly::{DenseUVPolynomial, Polynomial};
     use ark_poly::univariate::DensePolynomial;
     use ark_test_curves::bls12_381::{Bls12_381, Fr, G1Projective as G1,};
-    use crate::kzg::{setup, BatchOpening, MultipointOpening, KZG};
+    use crate::kzg::{setup, MultipointOpening, KZG};
     use crate::poly_utils::to_f;
 
     struct TestData {

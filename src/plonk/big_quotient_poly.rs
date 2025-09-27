@@ -18,8 +18,8 @@ pub fn shift_coefficients<F: PrimeField>(mut values: Vec<F>, n: usize) -> Vec<F>
         values[i + n] = values[i];
     }
 
-    for i in 0..n {
-        values[i] = F::zero();
+    for value in values.iter_mut().take(n) {
+        *value = F::zero();
     }
 
     values
@@ -55,7 +55,7 @@ impl<F: PrimeField> BigQuotientPoly<F> {
         (&self.t_lo, &self.t_mid, &self.t_hi)
     }
 
-    pub fn to_splitted_polys(self) -> (DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>) {
+    pub fn into_splitted_polys(self) -> (DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>) {
         (self.t_lo, self.t_mid, self.t_hi)
     }
 
@@ -65,8 +65,8 @@ impl<F: PrimeField> BigQuotientPoly<F> {
             + &self.t_hi * x_shift.pow([self.n as u64 * 2])
     }
 
-    pub fn to_combined(self) -> DensePolynomial<F> {
-        self.t_lo
+    pub fn into_combined(self) -> DensePolynomial<F> {
+        &self.t_lo
             + DensePolynomial::from_coefficients_vec(shift_coefficients(self.t_mid.coeffs, self.n))
             + DensePolynomial::from_coefficients_vec(shift_coefficients(self.t_hi.coeffs, self.n * 2))
     }

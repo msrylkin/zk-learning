@@ -82,7 +82,7 @@ impl<F: Field> DenseMultilinFinalEvaluationOracle<F> {
 
 impl<F: Field> OracleEvaluation<F> for DenseMultilinFinalEvaluationOracle<F> {
     fn final_eval(&self, r: &[F]) -> F {
-        self.0.evaluate(&r.to_vec())
+        self.0.evaluate(r)
     }
 }
 

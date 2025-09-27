@@ -10,7 +10,6 @@ use crate::plonk::circuit::{PublicWitness};
 use crate::plonk::proof::Proof;
 use crate::plonk::protocol::Party;
 use crate::plonk::transcript_protocol::TranscriptProtocol;
-use crate::poly_utils::{const_poly};
 
 pub struct PlonkVerifier<'a, P: Pairing> {
     party_data: Party<'a, P>,
@@ -51,13 +50,13 @@ impl<'a, P: Pairing> PlonkVerifier<'a, P> {
 
         let challenges = derive_challenges(
             omega,
-            &proof,
+            proof,
             &public_witness.pi_vector,
             &public_witness.output_vector,
         );
 
         let D = self.compute_linearized_commitment(
-            &proof,
+            proof,
             &public_witness.pi_combined,
             &challenges
         );
@@ -141,7 +140,7 @@ fn derive_challenges<P: Pairing>(
 ) -> DerivedChallenges<P::ScalarField> {
     let mut transcript = TranscriptProtocol::<P>::new(
         omega,
-        [public_input_vector.clone(), output_vector.clone()].concat().as_slice(),
+        [public_input_vector, output_vector].concat().as_slice(),
     );
 
     transcript.append_abc_commitments(proof.commitments.a.into_affine(), proof.commitments.b.into_affine(), proof.commitments.c.into_affine());

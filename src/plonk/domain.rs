@@ -1,5 +1,5 @@
 use std::ops::Deref;
-use ark_ff::{Field, PrimeField};
+use ark_ff::{PrimeField};
 use crate::evaluation_domain::MultiplicativeSubgroup;
 
 pub struct PlonkDomain<F: PrimeField> {
@@ -52,9 +52,9 @@ impl<F: PrimeField> PlonkDomain<F> {
             let k1 = F::from(i);
             let k2 = k1.square();
 
-            let k1_n = k1.pow(&[n as u64]);
-            let k2_n  = k2.pow(&[n as u64]);
-            let k1_over_k2 = (k1 / k2).pow(&[n as u64]);
+            let k1_n = k1.pow([n as u64]);
+            let k2_n  = k2.pow([n as u64]);
+            let k1_over_k2 = (k1 / k2).pow([n as u64]);
 
             if !k1_n.is_one() && !k2_n.is_one() && !k1_over_k2.is_one() {
                 break (k1, k2);

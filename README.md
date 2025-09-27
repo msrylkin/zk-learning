@@ -77,7 +77,9 @@ fn setup_kzg(n: usize) -> KZG<Bls12_381> {
 
 
 fn main() {
-    let domain = PlonkDomain::create_from_subgroup(generate_multiplicative_subgroup::<{ 1 << 4 }, Fr>());
+    let domain = PlonkDomain::create_from_subgroup(
+        generate_multiplicative_subgroup::<{ 1 << 4 }, Fr>(),
+    );
     let circuit = get_circuit();
     let public = vec![Fr::from(90)];
     let private = vec![Fr::from(893)];

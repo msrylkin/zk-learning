@@ -6,22 +6,33 @@ use ark_poly::univariate::{DensePolynomial};
 use ark_ff::Field;
 use ark_poly::{DenseUVPolynomial, Polynomial};
 
+/// Object encapsulating kzg public parameters
 pub struct Config<P: Pairing> {
+    /// Powers of tau on G1
     srs: Vec<P::G1>,
-    pub verifier_key: P::G2,
+    /// toxic_waste * G2
+    verifier_key: P::G2,
 }
 
+/// KZG pairing object. Created for a particular set of public parameters
 pub struct KZG<P: Pairing> {
-    pub config: Config<P>,
+    config: Config<P>,
 }
 
+/// Opening struct for check in multipoint check API.
+/// `commitments` must be in the same order as `evaluations` in `batch_opening`
 pub struct MultipointOpening<'a, P: Pairing> {
+    /// Opening with evaluations and batched evaluation proof
     pub batch_opening: &'a BatchOpening<P>,
+    /// Linearization scalar for batching evaluations in evaluation proof
     pub linearization_scalar: &'a P::ScalarField,
+    /// Point x of evaluation f(x)
     pub opening_point: &'a P::ScalarField,
+    /// Commitments to opened polynomials
     pub commitments: &'a [P::G1],
 }
 
+/// Create public parameters object
 pub fn setup<P: Pairing>(n: usize, toxic_waste: P::ScalarField) -> Config<P> {
     Config {
         srs: (0..n).map(|i| P::G1::generator() * toxic_waste.pow([i as u64])).collect(),
@@ -30,43 +41,47 @@ pub fn setup<P: Pairing>(n: usize, toxic_waste: P::ScalarField) -> Config<P> {
 }
 
 #[derive(Debug)]
+/// Single point opening
 pub struct Opening<P: Pairing> {
+    /// Evaluation value f(x)
     pub evaluation: P::ScalarField,
+    /// Evaluation proof `(f(tau) - f(r)) / (tau - r)` on `G1`
     pub evaluation_proof: P::G1,
 }
 
+/// Single-point opening for multiple polynomials
+pub struct BatchOpening<P: Pairing> {
+    evaluations: Vec<P::ScalarField>,
+    evaluation_proof: P::G1,
+}
+
 impl<P: Pairing> Opening<P> {
+    /// Creates new opening for provided `evaluation` and `evaluation_proof`
     pub fn new(evaluation: P::ScalarField, evaluation_proof: P::G1) -> Self {
         Self {
             evaluation,
             evaluation_proof,
         }
     }
-}
 
-pub struct BatchOpening<P: Pairing> {
-    evaluations: Vec<P::ScalarField>,
-    evaluation_proof: P::G1,
-}
-
-impl<P: Pairing> BatchOpening<P> {
-    pub fn proof(&self) -> P::G1 {
-        self.evaluation_proof
-    }
-}
-
-impl<P: Pairing> Opening<P> {
+    /// Evaluation proof of the opening
     pub fn proof(&self) -> P::G1 {
         self.evaluation_proof
     }
 }
 
 impl<P: Pairing> BatchOpening<P> {
+    /// Creates new batched opening for the vector of `evaluations` and the batched `evaluation_proof`
     pub fn new(evaluations: Vec<P::ScalarField>, evaluation_proof: P::G1) -> Self {
         Self {
             evaluations,
             evaluation_proof,
         }
+    }
+
+    /// Evaluation proof of the opening
+    pub fn proof(&self) -> P::G1 {
+        self.evaluation_proof
     }
 }
 
@@ -89,10 +104,16 @@ impl<P: Pairing> From<&Opening<P>> for BatchOpening<P> {
 }
 
 impl<P: Pairing> KZG<P> {
+    /// Creates a new KZG instance for the provided public parameters `config`.
     pub fn new(config: Config<P>) -> Self {
         Self { config }
     }
 
+    /// Commit to a univariate polynomial.
+    /// Returns the polynomial evaluated at the secret value tau on G1  (`f(tau) * G1`)
+    ///
+    /// # Panics
+    /// if poly degree + 1 < srs.len()
     pub fn commit(
         &self,
         poly: &DensePolynomial<P::ScalarField>,
@@ -108,7 +129,7 @@ impl<P: Pairing> KZG<P> {
             .fold(P::G1::zero(), |a, b| a + b)
     }
 
-    pub fn linearize_elements(elements: &[P::ScalarField], linearization_scalar: &P::ScalarField) -> P::ScalarField {
+    fn linearize_elements(elements: &[P::ScalarField], linearization_scalar: &P::ScalarField) -> P::ScalarField {
         elements
             .iter()
             .enumerate()
@@ -117,7 +138,7 @@ impl<P: Pairing> KZG<P> {
             })
     }
 
-    pub fn linearize_commitments(elements: &[P::G1], linearization_scalar: &P::ScalarField) -> P::G1 {
+    fn linearize_commitments(elements: &[P::G1], linearization_scalar: &P::ScalarField) -> P::G1 {
         elements
             .iter()
             .enumerate()
@@ -126,6 +147,8 @@ impl<P: Pairing> KZG<P> {
             })
     }
 
+    /// Batch opens multiple polynomials `polys` at the random challenge `point`.
+    /// Quotient polynomials are combined into one with `linearization_scalar`, and then commited
     pub fn batch_open(
         &self,
         polys: &[&DensePolynomial<P::ScalarField>],
@@ -149,6 +172,7 @@ impl<P: Pairing> KZG<P> {
         BatchOpening::new(evaluations, eval_proof)
     }
 
+    /// Open a single `poly` at evaluation `point`
     pub fn open(
         &self,
         poly: &DensePolynomial<P::ScalarField>,
@@ -163,6 +187,8 @@ impl<P: Pairing> KZG<P> {
         Opening::new(evaluations[0], evaluation_proof)
     }
 
+    /// Checks a single `opening` against the provided `commitment` at `point`.
+    /// Returns `true` if the check succeeds.
     pub fn check_single(
         &self,
         point: &P::ScalarField,
@@ -182,6 +208,8 @@ impl<P: Pairing> KZG<P> {
         )
     }
 
+    /// Checks batched `openings` against the provided `commitments` at `point` with `linearization_scalar`.
+    /// Returns `true` if the check succeeds.
     pub fn check_batched(
         &self,
         point: &P::ScalarField,
@@ -213,9 +241,11 @@ impl<P: Pairing> KZG<P> {
         linearized_commitments - P::G1::generator() * linearized_evaluations
     }
 
+    /// Checks multiple openings `multipoint_openings` in a single pairing check.
+    /// Each opening is linearized with `multipoint_linearization_scalar`.
+    /// Returns `true` if the check succeeds.
     pub fn check_multipoint(
         &self,
-        // commitments: &[P::G1],
         multipoint_openings: &[MultipointOpening<P>],
         multipoint_linearization_scalar: &P::ScalarField,
     ) -> bool {

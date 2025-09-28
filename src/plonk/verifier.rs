@@ -51,7 +51,7 @@ impl<'a, P: Pairing> PlonkVerifier<'a, P> {
         let challenges = derive_challenges(
             omega,
             proof,
-            &public_witness.pi_vector,
+            &public_witness.inputs_vector,
             &public_witness.output_vector,
         );
 

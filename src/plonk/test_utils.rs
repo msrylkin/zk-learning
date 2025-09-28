@@ -4,9 +4,9 @@ pub mod test_utils {
     use ark_ff::{FftField, Field, PrimeField};
     use ark_poly::univariate::DensePolynomial;
     use crate::kzg::{setup, KZG};
-    use crate::plonk::circuit::circuit_description::{CircuitDescription};
+    use crate::plonk::circuit::{CircuitDescription};
     use crate::plonk::circuit::CompiledCircuit;
-    use crate::plonk::circuit::solution::Solution;
+    use crate::plonk::circuit::PlonkSolution;
     use crate::plonk::domain::PlonkDomain;
     use crate::poly_utils::const_poly;
 
@@ -48,7 +48,7 @@ pub mod test_utils {
     }
 
     #[cfg(test)]
-    pub fn get_test_solution<F: FftField + PrimeField>(domain: &PlonkDomain<F>) -> Solution<F> {
+    pub fn get_test_solution<F: FftField + PrimeField>(domain: &PlonkDomain<F>) -> PlonkSolution<F> {
         build_test_circuit().solve(&[F::from(9)], &[F::from(-544000)], domain)
     }
 

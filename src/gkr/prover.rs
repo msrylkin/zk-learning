@@ -1,7 +1,7 @@
 use ark_ff::Field;
 use ark_poly::{DenseMultilinearExtension, DenseUVPolynomial, MultilinearExtension, Polynomial};
 use ark_poly::univariate::DensePolynomial;
-use crate::gkr::circuit::{Circuit, Solution};
+use crate::gkr::circuit::{Circuit, GkrSolution};
 use crate::gkr::proof::{GKRProof, GKRProofLayer};
 use crate::random_oracle::RandomOracle;
 use crate::poly_utils::{get_bits, interpolate, line, restrict_poly, reverse_bits, to_two_or_one_degree};
@@ -147,7 +147,7 @@ impl<F: Field> SumCheckPoly<F> for LayerRoundPoly<F> {
 
 pub fn prove<F: Field, O: RandomOracle<Item = F>>(
     circuit: &Circuit<F>,
-    solution: &Solution<F>,
+    solution: &GkrSolution<F>,
     random_oracle: &O,
     sum_check_protocol: &SumCheckProtocol<O>,
 ) -> GKRProof<F> {

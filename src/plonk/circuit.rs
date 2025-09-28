@@ -1,26 +1,32 @@
-pub mod circuit_description;
-pub mod solution;
-pub mod compiled_circuit;
+mod circuit_description;
+mod solution;
+mod compiled_circuit;
 mod preprocess;
 
 use ark_ff::{FftField, PrimeField};
 use ark_poly::univariate::{DensePolynomial};
-pub use crate::plonk::circuit::compiled_circuit::CompiledCircuit;
-pub use crate::plonk::circuit::circuit_description::CircuitDescription;
-pub use preprocess::*;
+pub use compiled_circuit::CompiledCircuit;
+pub use circuit_description::CircuitDescription;
+pub use solution::PlonkSolution;
+pub use preprocess::{preprocess_circuit, PreprocessedCircuit};
 
+/// Representation of the public witness for a circuit.
+///
+/// Contains:
+/// - `inputs_vector`: the public input values,
+/// - `output_vector`: the circuit output values,
+/// - `pi_combined`: a polynomial obtained by interpolating inputs and outputs together.
 #[derive(Clone, Debug)]
 pub struct PublicWitness<F: FftField + PrimeField> {
+    /// Polynomial interpolating both inputs and outputs.
     pub pi_combined: DensePolynomial<F>,
-    pub pi_vector: Vec<F>,
+    /// Vector of circuit inputs.
+    pub inputs_vector: Vec<F>,
+    /// Vector of circuit outputs.
     pub output_vector: Vec<F>,
 }
 
-pub struct PublicInput<F: FftField + PrimeField> {
-    pub pi: DensePolynomial<F>,
-    pub pi_vector: Vec<F>,
-}
-
+/// Witness values for a single gate, including its left input, right input, and output.
 #[derive(Debug, Clone)]
 pub struct GateSolution<F: FftField + PrimeField> {
     left: F,

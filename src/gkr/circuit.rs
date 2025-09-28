@@ -50,6 +50,16 @@ impl GateType {
     }
 }
 
+/// Layer struct containing circuit gates.
+/// Each gate has left and right input indices referencing values from the previous layer.
+///
+/// # Example
+/// ```rust
+/// use zk_learning::Layer;
+/// let layer = Layer::new()
+///     .add_addition_gate((0, 1))
+///     .add_addition_gate((2, 3));
+/// ```
 #[derive(Debug)]
 pub struct Layer {
     gates: Vec<GateType>,
@@ -62,10 +72,13 @@ impl Default for Layer {
 }
 
 impl Layer {
+    /// Creates empty layer
     pub fn new() -> Self {
         Self { gates: vec![] }
     }
 
+    /// Add addition gate (+) for `inputs`:(`left`, `right`).
+    /// `inputs` represents gate indexes from previous layer
     pub fn add_addition_gate(self, inputs: (usize, usize)) -> Self {
         let mut gates = self.gates;
         gates.push(GateType::AddGate(Gate { inputs }));
@@ -75,6 +88,8 @@ impl Layer {
         }
     }
 
+    /// Add multiplication gate (*) for `inputs`:(`left`, `right`).
+    /// `inputs` represents gate indexes from previous layer
     pub fn add_multiplication_gate(self, inputs: (usize, usize)) -> Self {
         let mut gates = self.gates;
         gates.push(GateType::MulGate(Gate { inputs }));
@@ -85,18 +100,44 @@ impl Layer {
     }
 }
 
+/// Layered Circuit representation for GKR
 #[derive(Debug)]
 pub struct Circuit<F: Field> {
     inputs: Vec<F>,
     layers: Vec<Layer>
 }
 
-
+/// Circuit Builder object for creating layered circuits.
+/// Consumes `self` and returns a new `Self` after each method call.
+///
+/// # Example
+/// ```rust
+/// use zk_learning::{CircuitBuilder, Layer};
+/// use ark_test_curves::bls12_381::Fr;
+///
+/// let circuit = CircuitBuilder::new(
+///     vec![10, 200, 20, 300].into_iter().map(Fr::from).collect()
+/// )
+/// .add_layer(
+///     Layer::new()
+///         .add_addition_gate((0, 1))
+///         .add_addition_gate((2, 3))
+/// )
+/// .add_layer(
+///     Layer::new()
+///         .add_multiplication_gate((0, 1))
+/// )
+/// .build();
+/// ```
 pub struct CircuitBuilder<F: Field> {
     circuit: Circuit<F>,
 }
 
 impl<F: Field> CircuitBuilder<F> {
+    /// Creates a new empty `CircuitBuilder` for the provided `inputs`.
+    ///
+    /// # Panics
+    /// if `inputs.len() == 0`.
     pub fn new(inputs: Vec<F>) -> Self {
         assert_ne!(inputs.len(), 0);
 
@@ -108,6 +149,7 @@ impl<F: Field> CircuitBuilder<F> {
         }
     }
 
+    /// Adds a new `Layer` to the circuit
     pub fn add_layer(self, layer: Layer) -> Self {
         let mut circuit = self.circuit;
         circuit.layers.push(layer);
@@ -116,30 +158,37 @@ impl<F: Field> CircuitBuilder<F> {
             circuit
         }
     }
-    
+
+    /// Returns the constructed `Circuit`.
     pub fn build(self) -> Circuit<F> {
         self.circuit
     }
 }
 
-impl<F: Field> Solution<F>  {
+impl<F: Field> GkrSolution<F>  {
+    /// Returns a clone of the evaluations of all gates across layers.
+    /// Evaluations are ordered consistently with the order of gates in each layer.
     pub fn to_evaluations(&self) -> Vec<Vec<F>> {
         self.evaluations.clone()
     }
-    
+
+    /// Returns a clone of the circuit inputs.
     pub fn inputs(&self) -> Vec<F> {
         self.inputs.clone()
     }
 }
 
+/// Solution struct for a layered circuit.
+/// Stores ordered gate evaluations and the original inputs.
 #[derive(Debug)]
-pub struct Solution<F: Field> {
+pub struct GkrSolution<F: Field> {
     evaluations: Vec<Vec<F>>,
     inputs: Vec<F>,
 }
 
 impl<F: Field> Circuit<F> {
-    pub fn solve(&self) -> Solution<F> {
+    /// Solves the circuit for the given inputs and returns a `Solution`.
+    pub fn solve(&self) -> GkrSolution<F> {
         let mut evaluations = vec![];
         for layer in &self.layers {
             let previous_layer_values = evaluations.last().unwrap_or(&self.inputs);
@@ -153,7 +202,7 @@ impl<F: Field> Circuit<F> {
             evaluations.push(current_layer_values);
         }
         
-        Solution {
+        GkrSolution {
             inputs: self.inputs.clone(),
             evaluations,
         }
@@ -190,17 +239,29 @@ impl<F: Field> Circuit<F> {
         DenseMultilinearExtension::from_evaluations_vec(total_vars_num, evals)
     }
 
+    /// Returns the number of gates in the bottom layer relative to `layer_i`.
+    /// If `layer_i == 0`, returns the number of inputs instead.
     pub fn get_bottom_layer_gates_count(&self, layer_i: usize) -> usize {
         match layer_i {
             0 => self.inputs.len(),
             _ => self.layers[layer_i - 1].gates.len(),
         }
     }
-    
+
+    /// Computes the multilinear extension polynomial for the addition gates in `layer_i`.
+    ///
+    /// The polynomial evaluates to 1 if and only if the Boolean input corresponds
+    /// to an addition gate index, and 0 otherwise.
+    /// On the Boolean domain, it outputs 0 or 1; outside it, it may take arbitrary values in the field `F`.
     pub fn add_i(&self, layer_i: usize) -> DenseMultilinearExtension<F> {
         self.eq(layer_i, |gate| matches!(gate, GateType::AddGate(_)))
     }
 
+    /// Computes the multilinear extension polynomial for the multiplication gates in `layer_i`.
+    ///
+    /// The polynomial evaluates to 1 if and only if the Boolean input corresponds
+    /// to a multiplication gate index, and 0 otherwise.
+    /// On the Boolean domain, it outputs 0 or 1; outside it, it may take arbitrary values in the field `F`.
     pub fn mul_i(&self, layer_i: usize) -> DenseMultilinearExtension<F> {
         self.eq(layer_i, |gate| matches!(gate, GateType::MulGate(_)))
     }

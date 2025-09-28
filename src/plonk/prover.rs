@@ -8,7 +8,7 @@ use ark_std::iterable::Iterable;
 use ark_std::{One, Zero};
 use crate::plonk::big_quotient_poly::BigQuotientPoly;
 use crate::plonk::blinder::{blind_big_quotient, blind_solution, blind_z_poly};
-use crate::plonk::circuit::solution::Solution;
+use crate::plonk::circuit::PlonkSolution;
 use crate::plonk::permutation::PermutationArgument;
 use crate::plonk::proof::{Commitments, OpeningProofs, Openings, Proof};
 use crate::plonk::protocol::Party;
@@ -38,14 +38,14 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
 
     pub fn prove(
         &self,
-        solution: Solution<P::ScalarField>,
+        solution: PlonkSolution<P::ScalarField>,
     ) -> Proof<P> {
         let omega = self.domain.generator();
 
         let mut transcript = TranscriptProtocol::<P>::new(
             omega,
             [
-                solution.public_witness.pi_vector.clone(),
+                solution.public_witness.inputs_vector.clone(),
                 solution.public_witness.output_vector.clone(),
             ].concat().as_slice()
         );
@@ -130,7 +130,7 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
 
     fn compute_big_quotient(
         &self,
-        solution: &Solution<P::ScalarField>,
+        solution: &PlonkSolution<P::ScalarField>,
         z: &DensePolynomial<P::ScalarField>,
         z_shifted: &DensePolynomial<P::ScalarField>,
         perm_argument: &PermutationArgument<P::ScalarField>,
@@ -165,7 +165,7 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
 
     fn compute_gate_check_poly(
         &self,
-        solution: &Solution<P::ScalarField>,
+        solution: &PlonkSolution<P::ScalarField>,
     ) -> DensePolynomial<P::ScalarField> {
         &solution.a * &solution.b * &self.circuit.qm
             + &solution.a * &self.circuit.ql
@@ -176,7 +176,7 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
 
     fn compute_openings(
         &self,
-        solution: &Solution<P::ScalarField>,
+        solution: &PlonkSolution<P::ScalarField>,
         z_shifted: &DensePolynomial<P::ScalarField>,
         transcript_protocol: &TranscriptProtocol<P>,
     ) -> Openings<P::ScalarField> {
@@ -195,7 +195,7 @@ impl<'a, P: Pairing> PlonkProver<'a, P> {
     fn linearization_poly(
         &self,
         openings: &Openings<P::ScalarField>,
-        solution: &Solution<P::ScalarField>,
+        solution: &PlonkSolution<P::ScalarField>,
         permutation_argument: &PermutationArgument<P::ScalarField>,
         z_poly: &DensePolynomial<P::ScalarField>,
         big_quotient_poly: &BigQuotientPoly<P::ScalarField>,
@@ -255,7 +255,7 @@ mod tests {
     use crate::plonk::blinder::{blind_solution};
     use crate::plonk::circuit::{preprocess_circuit, CompiledCircuit};
     use crate::evaluation_domain::generate_multiplicative_subgroup;
-    use crate::plonk::circuit::solution::Solution;
+    use crate::plonk::circuit::PlonkSolution;
     use crate::plonk::domain::PlonkDomain;
     use crate::plonk::permutation::PermutationArgument;
     use crate::plonk::proof::{Commitments, OpeningProofs, Openings, Proof};
@@ -268,7 +268,7 @@ mod tests {
         kzg: KZG<Bls12_381>,
         domain: &'a PlonkDomain<Fr>,
         test_circuit: CompiledCircuit<Fr>,
-        solution: Solution<Fr>,
+        solution: PlonkSolution<Fr>,
         transcript: TranscriptProtocol<Bls12_381>,
         Zh: SparsePolynomial<Fr>,
         omega: Fr,
@@ -406,7 +406,7 @@ mod tests {
         let domain = get_test_domain();
         let TestEnv { kzg, domain, test_circuit, solution, Zh, omega, .. } = prepare_test_environment(&domain);
         let preprocessed_circuit= preprocess_circuit(&test_circuit, &kzg);
-        let mut transcript = TranscriptProtocol::<Bls12_381>::new(domain.generator(), &solution.public_witness.pi_vector);
+        let mut transcript = TranscriptProtocol::<Bls12_381>::new(domain.generator(), &solution.public_witness.inputs_vector);
         transcript.append_abc_commitments(kzg.commit(&solution.a).into_affine(), kzg.commit(&solution.b).into_affine(), kzg.commit(&solution.c).into_affine());
         let (beta, gamma) = transcript.get_beta_gamma();
 

@@ -2,6 +2,10 @@ use std::ops::Deref;
 use ark_ff::{PrimeField};
 use crate::evaluation_domain::MultiplicativeSubgroup;
 
+/// Evaluation domain for Plonk.
+///
+/// It is based on a multiplicative subgroup and includes two coset shifters, `k1` and `k2`.
+/// These shifters are chosen such that applying them maps the subgroup into disjoint cosets.
 pub struct PlonkDomain<F: PrimeField> {
     domain: MultiplicativeSubgroup<F>,
     k1: F,
@@ -31,20 +35,26 @@ impl<F: PrimeField> PlonkDomain<F> {
         Self { domain, k1, k2 }
     }
 
+    /// Returns the first coset shifter.
     pub fn k1(&self) -> F {
         self.k1
     }
 
+    /// Returns the second coset shifter.
     pub fn k2(&self) -> F {
         self.k2
     }
 
+    /// Creates a Plonk domain from a multiplicative subgroup.
+    /// Picks two coset shifters such that each coset is disjoint from the subgroup and from each other.
     pub fn create_from_subgroup(domain: MultiplicativeSubgroup<F>) -> Self {
         let (k1, k2) = Self::pick_coset_shifters(&domain);
 
         Self::new(domain, k1, k2)
     }
 
+    /// Selects two valid coset shifters for the given subgroup.
+    /// Ensures that `k1^n ≠ 1`, `k2^n ≠ 1`, and `(k1/k2)^n ≠ 1`, where `n` is the subgroup size.
     fn pick_coset_shifters(domain: &[F]) -> (F, F) {
         let mut i = 2;
         let n = domain.len();

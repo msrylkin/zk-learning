@@ -2,15 +2,15 @@ use ark_ff::{FftField, Field, PrimeField};
 use ark_poly::DenseUVPolynomial;
 use ark_poly::univariate::{DensePolynomial, SparsePolynomial};
 use crate::plonk::big_quotient_poly::BigQuotientPoly;
-use crate::plonk::circuit::solution::Solution;
+use crate::plonk::circuit::PlonkSolution;
 
 pub fn blind_solution<F: PrimeField + FftField>(
-    solution: Solution<F>,
+    solution: PlonkSolution<F>,
     Zh: &SparsePolynomial<F>
-)  -> Solution<F> {
+)  -> PlonkSolution<F> {
     let [b1, b2, b3, b4, b5, b6] = generate_solution_blinders::<F>();
 
-    Solution {
+    PlonkSolution {
         a: blind_poly(&solution.a, Zh, &[b1, b2]),
         b: blind_poly(&solution.b, Zh, &[b3, b4]),
         c: blind_poly(&solution.c, Zh, &[b5, b6]),

@@ -1,16 +1,10 @@
 use std::collections::HashMap;
-use ark_ff::{FftField, Field, PrimeField};
+use ark_ff::{FftField, PrimeField};
 use ark_poly::univariate::DensePolynomial;
 use ark_std::iterable::Iterable;
 use crate::plonk::circuit::circuit_description::{CircuitDescription, Gate};
 use crate::plonk::domain::PlonkDomain;
 use crate::poly_utils::format_bool;
-
-fn pad_up_to_len<F: Field>(mut vec: Vec<F>, len: usize) -> Vec<F> {
-    vec.resize(len, F::zero());
-
-    vec
-}
 
 type Selectors<F> = (
     DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>
@@ -28,20 +22,32 @@ struct CompiledGate<F: PrimeField + FftField> {
     constant: F,
 }
 
+/// Compiled circuit with interpolated public polynomials
 pub struct CompiledCircuit<F: FftField + PrimeField> {
     public_inputs: Vec<usize>,
     outputs: Vec<usize>,
     constants: Vec<(usize, F)>,
+    /// `ql` poly (left witness poly selector)
     pub ql: DensePolynomial<F>,
+    /// `qr` poly (right witness poly selector)
     pub qr: DensePolynomial<F>,
+    /// `qm` poly (multiplication selector)
     pub qm: DensePolynomial<F>,
+    /// `qo` poly (output column selector)
     pub qo: DensePolynomial<F>,
+    /// `qc` poly (constant selector)
     pub qc: DensePolynomial<F>,
+    /// `sid_1` poly (identity permutation for left column)
     pub sid_1: DensePolynomial<F>,
+    /// `sid_2` poly (identity permutation for right column)
     pub sid_2: DensePolynomial<F>,
+    /// `sid_3` poly (identity permutation for output column)
     pub sid_3: DensePolynomial<F>,
+    /// `sigma_1` poly (hash permutation poly for left column)
     pub s_sigma_1: DensePolynomial<F>,
+    /// `sigma_2` poly (hash permutation poly for right column)
     pub s_sigma_2: DensePolynomial<F>,
+    /// `sigma_3` poly (hash permutation poly for output column)
     pub s_sigma_3: DensePolynomial<F>,
     gates: Vec<CompiledGate<F>>,
     sigma: Vec<usize>,
@@ -399,7 +405,7 @@ mod tests {
         let private_vector = vec![Fr::from(-544000)];
         let solution = test_circuit.solve(&public_vector, &private_vector, &domain);
 
-        assert_eq!(solution.public_witness.pi_vector, vec![Fr::from(9)]);
+        assert_eq!(solution.public_witness.inputs_vector, vec![Fr::from(9)]);
         assert_eq!(solution.public_witness.output_vector, vec![Fr::from(544644), Fr::from(-350750736)]);
 
         // a, b, c

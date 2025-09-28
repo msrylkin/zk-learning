@@ -2,7 +2,7 @@ use ark_ff::{FftField, PrimeField};
 use ark_poly::univariate::DensePolynomial;
 use crate::evaluation_domain::MultiplicativeSubgroup;
 use crate::plonk::circuit::CompiledCircuit;
-use crate::plonk::circuit::solution::Solution;
+use crate::plonk::circuit::PlonkSolution;
 use crate::plonk::permutation::hash_permutation::HashPermutationTerm;
 use crate::plonk::permutation::permutation_product::PermutationProduct;
 
@@ -11,7 +11,7 @@ pub struct PermutationArgument<'a, F: PrimeField + FftField> {
     domain: &'a MultiplicativeSubgroup<F>,
     beta: F,
     gamma: F,
-    solution: &'a Solution<F>,
+    solution: &'a PlonkSolution<F>,
     circuit: &'a CompiledCircuit<F>,
 }
 
@@ -21,7 +21,7 @@ impl<'a, F: PrimeField + FftField> PermutationArgument<'a, F> {
         beta: F,
         gamma: F,
         circuit: &'a CompiledCircuit<F>,
-        solution: &'a Solution<F>,
+        solution: &'a PlonkSolution<F>,
     ) -> Self {
         Self {
             domain,

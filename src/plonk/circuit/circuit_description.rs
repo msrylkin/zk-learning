@@ -3,7 +3,7 @@ use ark_ff::{FftField, Field, PrimeField};
 use ark_std::iterable::Iterable;
 use crate::plonk::circuit::{CompiledCircuit, GateSolution, PublicWitness};
 use crate::plonk::circuit::compiled_circuit::CircuitCompiler;
-use crate::plonk::circuit::solution::Solution;
+use crate::plonk::circuit::solution::PlonkSolution;
 use crate::plonk::domain::PlonkDomain;
 
 #[derive(Clone, Debug)]
@@ -19,6 +19,7 @@ pub enum Gate {
     Multiplication (ArithmeticGate),
 }
 
+/// Information about variables, constraints, public inputs, and outputs of the circuit.
 #[derive(Clone, Debug)]
 pub struct CircuitDescription<F: FftField + PrimeField> {
     variables_count: usize,
@@ -36,6 +37,9 @@ impl<F: FftField + PrimeField> Default for CircuitDescription<F> {
 }
 
 impl<F: FftField + PrimeField> CircuitDescription<F> {
+    /// Creates an empty circuit.
+    ///
+    /// Variable identifiers are represented and referenced as `usize` integers.
     pub fn new() -> Self {
         Self {
             variables_count: 1, // reserved for zero
@@ -47,34 +51,42 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
         }
     }
 
+    /// Count of public inputs in the circuit
     pub fn public_inputs_count(&self) -> usize {
         self.public_inputs.len()
     }
 
+    /// Returns a slice of variable indexes of public inputs
     pub fn public_inputs(&self) -> &[usize] {
         self.public_inputs.as_slice()
     }
 
+    /// Returns a slice of variable indexes of outputs
     pub fn outputs(&self) -> &[usize] {
         self.outputs.as_slice()
     }
 
+    /// Returns a slice of variable indexes of constants
     pub fn constants(&self) -> &[(usize, F)] {
         self.constants.as_slice()
     }
 
+    /// Slice of created gates (addition or multiplication)
     pub fn gates(&self) -> &[Gate] {
         self.gates.as_slice()
     }
 
+    /// Makes a variable public and adds it to the public variables store
     pub fn make_public(&mut self, var_i: usize) {
-        self.add_public_input(var_i);
+        self.public_inputs.push(var_i);
     }
 
-    pub fn add_public_input(&mut self, var_id: usize)  {
-        self.public_inputs.push(var_id);
-    }
-
+    /// Creates a new addition (+) gate constraint for `left` and `right` variables.
+    ///
+    /// A new variable is created for the result of the computation.
+    ///
+    /// # Returns
+    /// The created variable index
     pub fn addition_gate(&mut self, left: usize, right: usize) -> usize {
         let output = self.add_variable();
 
@@ -87,6 +99,12 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
         output
     }
 
+    /// Creates a new multiplication (*) gate constraint for `left` and `right` variables.
+    ///
+    /// A new variable is created for the result of the computation.
+    ///
+    /// # Returns
+    /// The created variable index
     pub fn multiplication_gate(&mut self, left: usize, right: usize) -> usize {
         let output = self.add_variable();
 
@@ -99,6 +117,10 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
         output
     }
 
+    /// Creates a constant variable for a fixed value `e`.
+    ///
+    /// # Returns
+    /// The new variable index
     pub fn constant_var(&mut self, e: F) -> usize {
         let const_i = self.add_variable();
 
@@ -107,6 +129,10 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
         const_i
     }
 
+    /// Adds a new variable and returns its ID (index). Each ID is unique.
+    ///
+    /// # Returns
+    /// The new variable index
     pub fn add_variable(&mut self) -> usize {
         let new_var = self.variables_count;
 
@@ -115,26 +141,37 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
         new_var
     }
 
+    /// Sets `var_id` as an output value of the circuit
     pub fn make_output(&mut self, var_id: usize) {
         self.outputs.push(var_id);
     }
 
+    /// Prepares and interpolates circuit selector and permutation polynomials over the Plonk `domain`.
+    ///
+    /// # Returns
+    /// A `CompiledCircuit` with interpolated circuit polynomials
     pub fn compile(&self, domain: &PlonkDomain<F>) -> CompiledCircuit<F> {
         CircuitCompiler::new(self, domain).compile()
     }
 
+    /// Solves the circuit for the given `public_input` and `private_input` values.
+    ///
+    /// Prepares the public input polynomial by interpolating the public inputs and outputs of the circuit over `domain`.
+    ///
+    /// # Returns
+    /// A `Solution` containing solved outputs and the prepared `PublicWitness`
     pub fn solve(
         &self,
         public_input: &[F],
         private_input: &[F],
         domain: &PlonkDomain<F>,
-    ) -> Solution<F> {
+    ) -> PlonkSolution<F> {
         assert_eq!(public_input.len(), self.public_inputs.len());
 
         let mut variables_map = HashMap::new();
         variables_map.insert(0usize, F::zero());
 
-        let mut pi_values = vec![];
+        let mut input_values = vec![];
         let mut out_values = vec![];
 
         let mut constraint_gates = vec![];
@@ -143,7 +180,7 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
 
         for (pi_index, value) in self.public_inputs.iter().zip(public_input) {
             variables_map.insert(*pi_index, *value);
-            pi_values.push(*value);
+            input_values.push(*value);
             input_gates.push(GateSolution {
                 left: *value,
                 right: F::zero(),
@@ -163,8 +200,6 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
         let mut private_input_iter = private_input.iter();
 
         for gate in &self.gates {
-            println!("\ngate {:?}", gate);
-            println!("vars map {:?}", variables_map);
             match gate {
                 Gate::Addition(gate) => {
                     let left = *variables_map.get(&gate.left).unwrap_or_else(|| private_input_iter.next().unwrap());
@@ -211,16 +246,17 @@ impl<F: FftField + PrimeField> CircuitDescription<F> {
 
         let solution_gates = [input_gates, out_gates, constants_gates, constraint_gates].concat();
 
-        let pi_combined_values = pi_values
+        // TODO: move interpolation outside of this function
+        let pi_combined_values = input_values
             .iter()
             .chain(out_values.iter())
             .map(|e| -*e)
             .collect::<Vec<_>>();
         let pi_combined_values = pad_up_to_len(pi_combined_values, domain.len());
 
-        Solution::new(solution_gates, domain, PublicWitness {
+        PlonkSolution::new(solution_gates, domain, PublicWitness {
             pi_combined: domain.interpolate_univariate(&pi_combined_values),
-            pi_vector: pi_values,
+            inputs_vector: input_values,
             output_vector: out_values,
         })
     }

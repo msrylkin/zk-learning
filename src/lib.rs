@@ -13,7 +13,6 @@
 //! zk-SNARK protocol for arbitrary circuits via a single polynomial `T(X)` checked against a vanishing polynomial.
 
 mod kzg;
-mod schnorr;
 mod sumcheck;
 mod poly_utils;
 mod gkr;

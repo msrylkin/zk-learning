@@ -41,8 +41,7 @@ mod tests {
     use ark_test_curves::bls12_381::Fr;
     use crate::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::domain::PlonkDomain;
-    use crate::plonk::test_utils::test_utils::get_test_circuit;
-
+    use crate::plonk::test_utils::get_test_circuit;
     #[test]
     pub fn test_s_id() {
         let domain = generate_multiplicative_subgroup::<{ 1 << 4 }, Fr>();

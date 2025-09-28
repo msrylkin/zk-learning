@@ -261,7 +261,7 @@ mod tests {
     use crate::plonk::proof::{Commitments, OpeningProofs, Openings, Proof};
     use crate::plonk::protocol::{Party};
     use crate::plonk::prover::{const_poly, shift_poly, PlonkProver};
-    use crate::plonk::test_utils::test_utils::{get_test_circuit, get_test_kzg, get_test_solution, hash_permutation_poly};
+    use crate::plonk::test_utils::{get_test_circuit, get_test_kzg, get_test_solution, hash_permutation_poly};
     use crate::plonk::transcript_protocol::TranscriptProtocol;
 
     struct TestEnv<'a> {

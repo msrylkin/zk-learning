@@ -272,7 +272,7 @@ fn pad_up_to_len<F: Field>(mut vec: Vec<F>, len: usize) -> Vec<F> {
 mod tests {
     use ark_test_curves::bls12_381::Fr;
     use crate::plonk::circuit::circuit_description::{ArithmeticGate, Gate};
-    use crate::plonk::test_utils::test_utils::build_test_circuit;
+    use crate::plonk::test_utils::build_test_circuit;
 
     #[test]
     pub fn test_circuit_description() {

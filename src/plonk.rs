@@ -22,7 +22,7 @@ mod tests {
     use crate::evaluation_domain::generate_multiplicative_subgroup;
     use crate::plonk::domain::PlonkDomain;
     use crate::plonk::protocol::{PlonkProtocol};
-    use crate::plonk::test_utils::test_utils::{get_test_circuit, get_test_solution};
+    use crate::plonk::test_utils::{get_test_circuit, get_test_solution};
 
     #[test]
     pub fn protocol_test() {

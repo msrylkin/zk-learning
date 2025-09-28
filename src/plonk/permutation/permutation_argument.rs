@@ -71,7 +71,7 @@ mod tests {
     use crate::evaluation_domain::{generate_multiplicative_subgroup};
     use crate::plonk::domain::PlonkDomain;
     use crate::plonk::permutation::permutation_argument::PermutationArgument;
-    use crate::plonk::test_utils::test_utils::{get_test_circuit, get_test_solution, hash_permutation_poly};
+    use crate::plonk::test_utils::{get_test_circuit, get_test_solution, hash_permutation_poly};
 
     #[test]
     fn test_hash_permutation_poly() {

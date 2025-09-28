@@ -1,5 +1,5 @@
 #[cfg(test)]
-pub mod test_utils {
+mod test_utils {
     use ark_ec::pairing::Pairing;
     use ark_ff::{FftField, Field, PrimeField};
     use ark_poly::univariate::DensePolynomial;
@@ -62,4 +62,5 @@ pub mod test_utils {
     }
 }
 
-
+#[cfg(test)]
+pub use test_utils::*;
